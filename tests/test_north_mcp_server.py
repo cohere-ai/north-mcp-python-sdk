@@ -45,6 +45,83 @@ async def test_missing_token(test_client: httpx.AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_invalid_base64_auth_header(test_client: httpx.AsyncClient):
+    result = await test_client.post(
+        "/messages/", headers={"Authorization": "Bearer invalid_base64"}
+    )
+    assert result.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_missing_server_secret():
+    app = NorthMCPServer(server_secret="secret")
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app.sse_app()), base_url="https://mcptest.com"
+    ) as client:
+        user_id_token = jwt.encode(
+            payload={"email": "test@company.com"}, key="does-not-matter"
+        )
+        header = AuthHeaderTokens(
+            server_secret=None,
+            user_id_token=user_id_token,
+            connector_access_tokens={"google": "abc"},
+        )
+        header_as_json = json.dumps(header.model_dump())
+        header_as_b64 = b64encode(header_as_json.encode()).decode()
+
+        result = await client.post(
+            "/messages/",
+            headers={"Authorization": f"Bearer {header_as_b64}"},
+        )
+
+        assert result.status_code == 401, result.text
+
+
+@pytest.mark.asyncio
+async def test_invalid_server_secret():
+    app = NorthMCPServer(server_secret="secret")
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app.sse_app()), base_url="https://mcptest.com"
+    ) as client:
+        user_id_token = jwt.encode(
+            payload={"email": "test@company.com"}, key="does-not-matter"
+        )
+        header = AuthHeaderTokens(
+            server_secret="wrong_secret",
+            user_id_token=user_id_token,
+            connector_access_tokens={"google": "abc"},
+        )
+        header_as_json = json.dumps(header.model_dump())
+        header_as_b64 = b64encode(header_as_json.encode()).decode()
+
+        result = await client.post(
+            "/messages/",
+            headers={"Authorization": f"Bearer {header_as_b64}"},
+        )
+        assert result.status_code == 401, result.text
+
+
+@pytest.mark.asyncio
+async def test_missing_email_in_user_id_token(test_client: httpx.AsyncClient):
+    user_id_token = jwt.encode(payload={}, key="does-not-matter")
+    header = AuthHeaderTokens(
+        server_secret="server_secret",
+        user_id_token=user_id_token,
+        connector_access_tokens={"google": "abc"},
+    )
+    header_as_json = json.dumps(header.model_dump())
+    header_as_b64 = b64encode(header_as_json.encode()).decode()
+
+    result = await test_client.post(
+        "/messages/",
+        headers={"Authorization": f"Bearer {header_as_b64}"},
+    )
+    assert result.status_code == 401
+
+
+@pytest.mark.asyncio
 async def test_valid_auth_header(app: NorthMCPServer, test_client: httpx.AsyncClient):
     user_id_token = jwt.encode(
         payload={"email": "test@company.com"}, key="does-not-matter"
