@@ -27,6 +27,7 @@ class AuthenticatedNorthUser(BaseUser):
         email: str | None = None,
     ):
         self.connector_access_tokens = connector_access_tokens
+        self.email = email
 
 
 auth_context_var = contextvars.ContextVar[AuthenticatedNorthUser | None](

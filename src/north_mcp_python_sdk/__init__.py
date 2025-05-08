@@ -12,9 +12,9 @@ from .auth import AuthContextMiddleware, NorthAuthBackend, on_auth_error
 class NorthMCPServer(FastMCP):
     def __init__(
         self,
-        server_secret: str | None = None,
         name: str | None = None,
         instructions: str | None = None,
+        server_secret: str | None = None,
         auth_server_provider: OAuthAuthorizationServerProvider[Any, Any, Any]
         | None = None,
         **settings: Any,
