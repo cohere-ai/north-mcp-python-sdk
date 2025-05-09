@@ -88,16 +88,10 @@ class NorthAuthBackend(AuthenticationBackend):
         if not auth_header:
             raise AuthenticationError("invalid authorization header")
 
-        if not auth_header.startswith("Bearer "):
-            raise AuthenticationError("invalid authorization header")
-
-        encoded_auth_header = auth_header.replace("Bearer ", "", 1)
-
-        if not encoded_auth_header:
-            raise AuthenticationError("invalid authorization header")
+        auth_header = auth_header.replace("Bearer ", "", 1)
 
         try:
-            decoded_auth_header = base64.b64decode(encoded_auth_header).decode()
+            decoded_auth_header = base64.b64decode(auth_header).decode()
         except Exception:
             raise AuthenticationError("invalid authorization header")
 

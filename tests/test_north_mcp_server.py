@@ -32,14 +32,16 @@ async def test_missing_auth_header(test_client: httpx.AsyncClient):
 
 @pytest.mark.asyncio
 async def test_invalid_auth_header(test_client: httpx.AsyncClient):
-    result = await test_client.post("/messages/", headers={"Authorization": "Invalid"})
+    result = await test_client.post(
+        "/messages/", headers={"Authorization": "Bearer Invalid"}
+    )
 
     assert result.status_code == 401
 
 
 @pytest.mark.asyncio
 async def test_missing_token(test_client: httpx.AsyncClient):
-    result = await test_client.post("/messages/", headers={"Authorization": "Bearer "})
+    result = await test_client.post("/messages/", headers={"Authorization": ""})
 
     assert result.status_code == 401
 
@@ -47,7 +49,7 @@ async def test_missing_token(test_client: httpx.AsyncClient):
 @pytest.mark.asyncio
 async def test_invalid_base64_auth_header(test_client: httpx.AsyncClient):
     result = await test_client.post(
-        "/messages/", headers={"Authorization": "Bearer invalid_base64"}
+        "/messages/", headers={"Authorization": "invalid_base64"}
     )
     assert result.status_code == 401
 
@@ -123,6 +125,31 @@ async def test_missing_email_in_user_id_token(test_client: httpx.AsyncClient):
 
 @pytest.mark.asyncio
 async def test_valid_auth_header(app: NorthMCPServer, test_client: httpx.AsyncClient):
+    user_id_token = jwt.encode(
+        payload={"email": "test@company.com"}, key="does-not-matter"
+    )
+    header = AuthHeaderTokens(
+        server_secret="server_secret",
+        user_id_token=user_id_token,
+        connector_access_tokens={"google": "abc"},
+    )
+    header_as_json = json.dumps(header.model_dump())
+    header_as_b64 = b64encode(header_as_json.encode()).decode()
+
+    result = await test_client.post(
+        "/messages/",
+        headers={"Authorization": f"Bearer {header_as_b64}"},
+        json={"method": "initialize"},
+        params={"session_id": "65cc6ee7899c40d08b1f369403a7f450"},
+    )
+
+    assert result.status_code != 401
+
+
+@pytest.mark.asyncio
+async def test_valid_auth_header_no_bearer(
+    app: NorthMCPServer, test_client: httpx.AsyncClient
+):
     user_id_token = jwt.encode(
         payload={"email": "test@company.com"}, key="does-not-matter"
     )
