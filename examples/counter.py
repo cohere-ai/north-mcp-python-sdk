@@ -22,7 +22,7 @@ def reset() -> str:
         user = default_user
 
     print(f"'reset' was called by: {user.email}")
-    counts[user.default] = 0
+    counts[user.email] = 0
     return "success"
 
 
