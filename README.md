@@ -61,7 +61,7 @@ From here:
 
 ### Adding authentication
 
-If you want to test the authentication mechanism locally you can do the following. First start the server in with the see transport:
+If you want to test the authentication mechanism locally you can do the following. First start the server with the sse transport:
 
 ```
 uv run examples/server.py --transport sse
