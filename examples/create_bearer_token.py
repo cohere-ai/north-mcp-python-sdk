@@ -1,3 +1,4 @@
+import argparse
 import json
 from base64 import b64encode
 
@@ -6,10 +7,8 @@ import jwt
 from north_mcp_python_sdk.auth import AuthHeaderTokens
 
 
-def create_bearer_token():
-    user_id_token = jwt.encode(
-        payload={"email": "test@company.com"}, key="does-not-matter"
-    )
+def create_bearer_token(email: str):
+    user_id_token = jwt.encode(payload={"email": email}, key="does-not-matter")
     header = AuthHeaderTokens(
         server_secret="server_secret",
         user_id_token=user_id_token,
@@ -21,4 +20,15 @@ def create_bearer_token():
 
 
 if __name__ == "__main__":
-    create_bearer_token()
+    parser = argparse.ArgumentParser(
+        description="Create a bearer token to use with the MCP server."
+    )
+    parser.add_argument(
+        "--email",
+        type=str,
+        default="test@company.com",
+        help="Email of the user to create a token for (default: test@company.com)",
+    )
+    args = parser.parse_args()
+
+    create_bearer_token(email=args.email)
