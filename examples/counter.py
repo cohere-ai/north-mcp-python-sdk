@@ -15,7 +15,7 @@ default_user = AuthenticatedNorthUser(
 
 @mcp.tool()
 def reset() -> str:
-    """Reset the count for the authenticated user"""
+    """Reset the count to zero"""
     try:
         user = get_authenticated_user()
     except:
@@ -28,7 +28,7 @@ def reset() -> str:
 
 @mcp.tool()
 def count() -> int:
-    """Get the current count for the authenticated user"""
+    """Get the current count"""
     try:
         user = get_authenticated_user()
     except:
@@ -40,7 +40,7 @@ def count() -> int:
 
 @mcp.tool()
 def increment() -> str:
-    """Increment the count for the authenticated user"""
+    """Increment the count by 1"""
     try:
         user = get_authenticated_user()
     except:
