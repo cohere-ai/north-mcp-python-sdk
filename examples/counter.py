@@ -18,10 +18,10 @@ def reset() -> str:
     """Reset the count for the authenticated user"""
     try:
         user = get_authenticated_user()
-        print(f"This tool was called by: {user.email}")
     except:
         user = default_user
-        print("unauthenticated user")
+
+    print(f"'reset' was called by: {user.email}")
     counts[user.default] = 0
     return "success"
 
@@ -31,10 +31,10 @@ def count() -> int:
     """Get the current count for the authenticated user"""
     try:
         user = get_authenticated_user()
-        print(f"This tool was called by: {user.email}")
     except:
         user = default_user
-        print("unauthenticated user")
+
+    print(f"'count' was called by: {user.email}")
     return counts[user.email]
 
 
@@ -43,10 +43,10 @@ def increment() -> str:
     """Increment the count for the authenticated user"""
     try:
         user = get_authenticated_user()
-        print(f"This tool was called by: {user.email}")
     except:
         user = default_user
-        print("unauthenticated user")
+
+    print(f"'increment' was called by: {user.email}")
     counts[user.email] += 1
     return "success"
 
