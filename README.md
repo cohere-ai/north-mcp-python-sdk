@@ -1,6 +1,6 @@
 # North MCP Python SDK
 
-This SDK builds on top of the original SDK. Please refer to the [original repository's README](https://cohereai.slack.com/archives/C08J3LZF7J6/p1746702928707359) for general information. This README focuses on North-specific details.
+This SDK builds on top of the original SDK. Please refer to the [original repository's README](https://github.com/modelcontextprotocol/python-sdk) for general information. This README focuses on North-specific details.
 
 
 ## Why this repository
@@ -61,7 +61,7 @@ From here:
 
 ### Adding authentication
 
-If you want to test the authentication mechanism locally you can do the following. First start the server in with the see transport:
+If you want to test the authentication mechanism locally you can do the following. First start the server with the sse transport:
 
 ```
 uv run examples/server.py --transport sse
