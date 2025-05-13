@@ -1,4 +1,5 @@
 import argparse
+
 from north_mcp_python_sdk import NorthMCPServer
 from north_mcp_python_sdk.auth import get_authenticated_user
 
