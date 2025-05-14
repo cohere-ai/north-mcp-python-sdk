@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 authors = [{ name = "Raphael Cristal", email = "raphael@cohere.com" }]
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = ["mcp>=1.7.1,<1.8.0", "pyjwt>=2.10.1"]
 
 [build-system]
