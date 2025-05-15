@@ -111,8 +111,7 @@ class NorthAuthBackend(AuthenticationBackend):
                     options={"verify_signature": False},
                 )
 
-                if not (email := user_id_token["email"]):
-                    raise AuthenticationError("invalid user id token")
+                email = user_id_token.get("email")
 
                 return AuthCredentials(), AuthenticatedNorthUser(
                     connector_access_tokens=tokens.connector_access_tokens, email=email
