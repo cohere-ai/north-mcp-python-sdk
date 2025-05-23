@@ -2,7 +2,7 @@ import argparse
 from north_mcp_python_sdk import NorthMCPServer
 from north_mcp_python_sdk.auth import get_authenticated_user
 
-mcp = NorthMCPServer("Demo", stateless_http=True, json_response=True, port=5222)
+mcp = NorthMCPServer("Demo", port=5222)
 
 
 @mcp.tool()

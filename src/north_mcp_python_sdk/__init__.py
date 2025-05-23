@@ -19,6 +19,15 @@ class NorthMCPServer(FastMCP):
         | None = None,
         **settings: Any,
     ):
+        if settings.get("stateless_http") is False:
+            raise ValueError("stateless_http must be True for NorthMCPServer")
+
+        if settings.get("json_response") is False:
+            raise ValueError("json_response must be True for NorthMCPServer")
+
+        settings["stateless_http"] = True
+        settings["json_response"] = True
+
         super().__init__(name, instructions, auth_server_provider, **settings)
         self._server_secret = server_secret
 
