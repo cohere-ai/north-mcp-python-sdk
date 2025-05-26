@@ -3,6 +3,13 @@
 This SDK builds on top of the original SDK. Please refer to the [original repository's README](https://github.com/modelcontextprotocol/python-sdk) for general information. This README focuses on North-specific details.
 
 
+## Installation
+
+```
+uv pip install git+ssh://git@github.com/cohere-ai/north-mcp-python-sdk.git
+```
+
+
 ## Why this repository
 This repository provides code to enable your server to use authentication with North, a custom extension to the original specification. Other than that, no changes are made to the SDK; this builds on top of it.
 
