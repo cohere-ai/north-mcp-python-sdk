@@ -16,7 +16,7 @@ def create_bearer_token(email: str):
     )
     header_as_json = json.dumps(header.model_dump())
     header_as_b64 = b64encode(header_as_json.encode()).decode()
-    print(header_as_b64)
+    return header_as_b64
 
 
 if __name__ == "__main__":
@@ -31,4 +31,5 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    create_bearer_token(email=args.email)
+    bearer_token = create_bearer_token(email=args.email)
+    print(bearer_token)
