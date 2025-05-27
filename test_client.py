@@ -31,7 +31,7 @@ async def run(url: str, bearer_token: str):
 if __name__ == "__main__":
     asyncio.run(
         run(
-            url="http://0.0.0.0:5222/sse",
-            bearer_token=create_bearer_token(email="matthias.hericks@cohere.com"),
+            url="https://c9fb-2001-a61-3501-6301-1577-a846-2914-7060.ngrok-free.app/sse",
+            bearer_token=create_bearer_token(email="abcd@company.com"),
         )
     )
