@@ -1,4 +1,5 @@
 import argparse
+import traceback
 from collections import defaultdict
 
 from north_mcp_python_sdk import NorthMCPServer
@@ -19,6 +20,7 @@ def reset() -> str:
     try:
         user = get_authenticated_user()
     except:
+        traceback.print_exc()
         user = default_user
 
     print(f"'reset' was called by: {user.email}")
@@ -32,6 +34,7 @@ def count() -> int:
     try:
         user = get_authenticated_user()
     except:
+        traceback.print_exc()
         user = default_user
 
     print(f"'count' was called by: {user.email}")
@@ -44,6 +47,7 @@ def increment() -> str:
     try:
         user = get_authenticated_user()
     except:
+        traceback.print_exc()
         user = default_user
 
     print(f"'increment' was called by: {user.email}")
