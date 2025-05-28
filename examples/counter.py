@@ -15,7 +15,7 @@ default_user = AuthenticatedNorthUser(
 
 
 @mcp.tool()
-def reset() -> str:
+def setup(count: int) -> str:
     """Reset the count to zero"""
     try:
         user = get_authenticated_user()
@@ -23,8 +23,8 @@ def reset() -> str:
         traceback.print_exc()
         user = default_user
 
-    print(f"'reset' was called by: {user.email}")
-    counts[user.email] = 0
+    print(f"'reset' ('count': {count}) was called by: {user.email}")
+    counts[user.email] = count
     return "success"
 
 
