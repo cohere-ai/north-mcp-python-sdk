@@ -2,7 +2,7 @@ import argparse
 from north_mcp_python_sdk import NorthMCPServer
 from north_mcp_python_sdk.auth import get_authenticated_user
 
-mcp = NorthMCPServer(name="Demo", port=5222)
+mcp = NorthMCPServer("Demo", port=5222)
 
 
 @mcp.tool()
@@ -24,8 +24,8 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--transport",
-        choices=["stdio", "sse"],
-        default="sse",
+        choices=["streamable-http", "stdio", "sse"],
+        default="streamable-http",
         help="Transport method to use (default: sse)",
     )
     args = parser.parse_args()

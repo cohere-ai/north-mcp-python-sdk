@@ -22,9 +22,17 @@ class NorthMCPServer(FastMCP):
         super().__init__(name, instructions, auth_server_provider, **settings)
         self._server_secret = server_secret
 
-    def sse_app(self) -> Starlette:
-        app = super().sse_app()
+    def sse_app(self, mount_path: str | None = None) -> Starlette:
+        app = super().sse_app(mount_path=mount_path)
+        self._add_middleware(app)
+        return app
 
+    def streamable_http_app(self) -> Starlette:
+        app = super().streamable_http_app()
+        self._add_middleware(app)
+        return app
+
+    def _add_middleware(self, app: Starlette) -> None:
         middleware = [
             Middleware(
                 AuthenticationMiddleware,
@@ -34,5 +42,3 @@ class NorthMCPServer(FastMCP):
             Middleware(AuthContextMiddleware),
         ]
         app.user_middleware.extend(middleware)
-
-        return app

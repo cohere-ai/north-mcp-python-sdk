@@ -16,7 +16,7 @@ This repository provides code to enable your server to use authentication with N
 
 ## Main differences
 
-* North only supports the SSE transport (to be replaced by StreamableHTTP) and the stdio transport.
+* North only supports the StreamableHTTP transport.
 * You can protect all requests to your server with a secret.
 * You can access the user's OAuth token to interact with third-party services on their behalf.
 * You can access the user's identity (from the identity provider used with North).
@@ -68,17 +68,17 @@ From here:
 
 ### Adding authentication
 
-If you want to test the authentication mechanism locally you can do the following. First start the server with the sse transport:
+If you want to test the authentication mechanism locally you can do the following. First start the server with the streamable http transport:
 
 ```
-uv run examples/server.py --transport sse
+uv run examples/server.py --transport streamable-http
 ```
 
 Next, create a bearer token. You can generate one using `examples/create_bearer_token.py` or use a pre-made one.
 
 Navigate to the MCP Inspector and configure it like this:
-* Transport Type: SSE
-* URL: http://localhost:5222/sse
+* Transport Type: Streamable HTTP
+* URL: http://localhost:5222/mcp
 * Authentication -> Bearer token: eyJzZXJ2ZXJfc2VjcmV0IjogInNlcnZlcl9zZWNyZXQiLCAidXNlcl9pZF90b2tlbiI6ICJleUpoYkdjaU9pSklVekkxTmlJc0luUjVjQ0k2SWtwWFZDSjkuZXlKbGJXRnBiQ0k2SW5SbGMzUkFZMjl0Y0dGdWVTNWpiMjBpZlEuV0pjckVUUi1MZnFtX2xrdE9vdjd0Q1ktTmZYR2JuYTVUMjhaeFhTaEZ4SSIsICJjb25uZWN0b3JfYWNjZXNzX3Rva2VucyI6IHsiZ29vZ2xlIjogImFiYyJ9fQ==
 
 Follow the same process as before. When you call the tool, you should see the following log in the terminal where you started the server:
