@@ -16,7 +16,7 @@ This repository provides code to enable your server to use authentication with N
 
 ## Main differences
 
-* North only supports the StreamableHTTP transport.
+* North only supports the StreamableHTTP transport. The sse transport is deprecated, it will work for backwards compatibility, but you shouldn't use it if you are creating new servers
 * You can protect all requests to your server with a secret.
 * You can access the user's OAuth token to interact with third-party services on their behalf.
 * You can access the user's identity (from the identity provider used with North).
