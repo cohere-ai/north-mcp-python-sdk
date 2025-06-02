@@ -1,4 +1,3 @@
-import argparse
 from north_mcp_python_sdk import NorthMCPServer
 from north_mcp_python_sdk.auth import get_authenticated_user
 
@@ -12,22 +11,11 @@ def add(a: int, b: int) -> int:
     try:
         user = get_authenticated_user()
         print(f"This tool was called by: {user.email}")
-    except:
+    except Exception:
         print("unauthenticated user")
 
     return a + b
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Run the MCP server with configurable transport."
-    )
-    parser.add_argument(
-        "--transport",
-        choices=["streamable-http", "stdio", "sse"],
-        default="streamable-http",
-        help="Transport method to use (default: sse)",
-    )
-    args = parser.parse_args()
-
-    mcp.run(transport=args.transport)
+    mcp.run(transport="streamable-http")

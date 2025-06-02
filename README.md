@@ -21,6 +21,12 @@ This repository provides code to enable your server to use authentication with N
 * You can access the user's OAuth token to interact with third-party services on their behalf.
 * You can access the user's identity (from the identity provider used with North).
 
+## Examples
+
+This repository contains example servers that you can use as a quickstart. You can find them in the [examples directory](https://github.com/cohere-ai/north-mcp-python-sdk/tree/main/examples).
+
+There are 2 examples, one that uses the auth to get the user making the tool call, and the other one shows how to send the right metadata so that the North UI can display the tool call results correctly.
+
 
 ## Authentication
 
@@ -33,7 +39,7 @@ mcp = NorthMCPServer(name="Demo", port=5222, server_secret="secret")
 ```
 
 #### I want to get the identity of the north user that is calling my server
-Refer to `examples/server.py`. During your request call the following:
+Refer to `examples/server_with_auth.py`. During your request call the following:
 ```python
 user = get_authenticated_user()
 print(user.email)
@@ -57,7 +63,7 @@ npx @modelcontextprotocol/inspector
 If authentication is not required and you just want to run it locally, you can choose the stdio transport. Navigate to the [MCP Inspector](http://127.0.0.1:6274) and configure it as follows:
 * Transport Type: stdio
 * Command: uv
-* Arguments: run examples/server.py --transport stdio
+* Arguments: run examples/server_with_auth.py --transport stdio
 
 From here:
 * Click "Connect"
@@ -71,7 +77,7 @@ From here:
 If you want to test the authentication mechanism locally you can do the following. First start the server with the streamable http transport:
 
 ```
-uv run examples/server.py --transport streamable-http
+uv run examples/server_with_auth.py --transport streamable-http
 ```
 
 Next, create a bearer token. You can generate one using `examples/create_bearer_token.py` or use a pre-made one.
