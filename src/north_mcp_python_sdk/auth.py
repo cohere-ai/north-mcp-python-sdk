@@ -1,5 +1,6 @@
 import base64
 import contextvars
+import logging
 
 import jwt
 from pydantic import BaseModel, Field, ValidationError
@@ -57,8 +58,12 @@ class AuthContextMiddleware:
     being stored in the context.
     """
 
-    def __init__(self, app: ASGIApp):
+    def __init__(self, app: ASGIApp, debug: bool = False):
         self.app = app
+        self.debug = debug
+        self.logger = logging.getLogger("NorthMCP.AuthContext")
+        if debug:
+            self.logger.setLevel(logging.DEBUG)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send):
         if scope["type"] == "lifespan":
@@ -66,7 +71,10 @@ class AuthContextMiddleware:
 
         user = scope.get("user")
         if not isinstance(user, AuthenticatedNorthUser):
+            self.logger.debug("Authentication failed: user not found in context. User type: %s", type(user))
             raise AuthenticationError("user not found in context")
+
+        self.logger.debug("Setting authenticated user in context: email=%s, connectors=%s", user.email, list(user.connector_access_tokens.keys()))
 
         token = auth_context_var.set(user)
         try:
@@ -80,30 +88,48 @@ class NorthAuthBackend(AuthenticationBackend):
     Authentication backend that validates Bearer tokens.
     """
 
-    def __init__(self, server_secret: str | None = None):
+    def __init__(self, server_secret: str | None = None, debug: bool = False):
         self._server_secret = server_secret
+        self.debug = debug
+        self.logger = logging.getLogger("NorthMCP.Auth")
+        if debug:
+            self.logger.setLevel(logging.DEBUG)
 
     async def authenticate(
         self, conn: HTTPConnection
     ) -> tuple[AuthCredentials, BaseUser] | None:
+        self.logger.debug("Authenticating request from %s", conn.client)
+        # Log all headers in debug mode (be careful with sensitive data)
+        headers_debug = {k: v for k, v in conn.headers.items()}
+        self.logger.debug("Request headers: %s", headers_debug)
+
         auth_header = conn.headers.get("Authorization")
 
         if not auth_header:
+            self.logger.debug("No Authorization header present")
             raise AuthenticationError("invalid authorization header")
+
+        self.logger.debug("Authorization header present (length: %d)", len(auth_header))
 
         auth_header = auth_header.replace("Bearer ", "", 1)
 
         try:
             decoded_auth_header = base64.b64decode(auth_header).decode()
-        except Exception:
+            self.logger.debug("Successfully decoded base64 auth header")
+        except Exception as e:
+            self.logger.debug("Failed to decode base64 auth header: %s", e)
             raise AuthenticationError("invalid authorization header")
 
         try:
             tokens = AuthHeaderTokens.model_validate_json(decoded_auth_header)
-        except ValidationError:
+            self.logger.debug("Successfully parsed auth tokens. Has server_secret: %s, Has user_id_token: %s, Connector count: %d", tokens.server_secret is not None, tokens.user_id_token is not None, len(tokens.connector_access_tokens))
+            self.logger.debug("Available connectors: %s", list(tokens.connector_access_tokens.keys()))
+        except ValidationError as e:
+            self.logger.debug("Failed to validate auth tokens: %s", e)
             raise AuthenticationError("unable to decode bearer token")
 
         if self._server_secret and self._server_secret != tokens.server_secret:
+            self.logger.debug("Server secret mismatch - access denied")
             raise AuthenticationError("access denied")
 
         if tokens.user_id_token:
@@ -115,12 +141,17 @@ class NorthAuthBackend(AuthenticationBackend):
                 )
 
                 email = user_id_token.get("email")
+                
+                self.logger.debug("Successfully decoded user ID token. Email: %s", email)
 
                 return AuthCredentials(), AuthenticatedNorthUser(
                     connector_access_tokens=tokens.connector_access_tokens, email=email
                 )
-            except Exception:
+            except Exception as e:
+                self.logger.debug("Failed to decode user ID token: %s", e)
                 raise AuthenticationError("invalid user id token")
+
+        self.logger.debug("Authentication successful without user ID token")
 
         return AuthCredentials(), AuthenticatedNorthUser(
             connector_access_tokens=tokens.connector_access_tokens,
