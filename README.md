@@ -20,6 +20,7 @@ This repository provides code to enable your server to use authentication with N
 * You can protect all requests to your server with a secret.
 * You can access the user's OAuth token to interact with third-party services on their behalf.
 * You can access the user's identity (from the identity provider used with North).
+* **Debug mode** for detailed authentication logging and troubleshooting.
 
 ## Examples
 
@@ -52,6 +53,56 @@ Similar as above:
 user = get_authenticated_user()
 print(user.connector_access_tokens)
 ```
+
+## Debug Mode
+
+The North MCP SDK includes a comprehensive debug mode that provides detailed logging of authentication processes, incoming requests, and token validation. This is invaluable when troubleshooting authentication issues.
+
+### Enabling Debug Mode
+
+There are several ways to enable debug mode:
+
+#### 1. Environment Variable (Recommended)
+```bash
+export DEBUG=true
+python your_server.py
+```
+
+#### 2. Constructor Parameter
+```python
+mcp = NorthMCPServer(name="Demo", port=5222, debug=True)
+```
+
+### What Gets Logged in Debug Mode
+
+When debug mode is enabled, you'll see detailed logs including:
+
+- **Request Headers**: All incoming HTTP headers (including Authorization)
+- **Token Parsing**: Base64 decoding and JSON parsing of auth tokens
+- **JWT Validation**: User ID token decoding and validation steps
+- **Authentication Details**: User email, available connectors, token counts
+- **Error Context**: Detailed error messages with troubleshooting context
+
+### Example Debug Output
+
+```
+2024-01-15 10:30:45 - NorthMCP.Auth - DEBUG - Authenticating request from ('127.0.0.1', 54321)
+2024-01-15 10:30:45 - NorthMCP.Auth - DEBUG - Request headers: {'authorization': 'Bearer eyJ...', 'content-type': 'application/json'}
+2024-01-15 10:30:45 - NorthMCP.Auth - DEBUG - Authorization header present (length: 248)
+2024-01-15 10:30:45 - NorthMCP.Auth - DEBUG - Successfully decoded base64 auth header
+2024-01-15 10:30:45 - NorthMCP.Auth - DEBUG - Successfully parsed auth tokens. Has server_secret: True, Has user_id_token: True, Connector count: 2
+2024-01-15 10:30:45 - NorthMCP.Auth - DEBUG - Available connectors: ['google', 'slack']
+2024-01-15 10:30:45 - NorthMCP.Auth - DEBUG - Successfully decoded user ID token. Email: user@example.com
+2024-01-15 10:30:45 - NorthMCP.AuthContext - DEBUG - Setting authenticated user in context: email=user@example.com, connectors=['google', 'slack']
+```
+
+### Debug Mode Examples
+
+See the - `examples/server_with_debug.py` for a debug mode for an example:
+
+### Security Note
+
+Debug mode logs sensitive information including request headers and token metadata. **Never enable debug mode in production environments** as it may expose authentication details in logs.
 
 ## Local Development without North
 
