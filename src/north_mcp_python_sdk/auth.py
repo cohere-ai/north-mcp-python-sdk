@@ -61,6 +61,9 @@ class AuthContextMiddleware:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send):
+        if scope["type"] == "lifespan":
+            return await self.app(scope, receive, send)
+
         user = scope.get("user")
         if not isinstance(user, AuthenticatedNorthUser):
             raise AuthenticationError("user not found in context")

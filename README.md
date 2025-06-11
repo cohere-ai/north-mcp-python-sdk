@@ -16,10 +16,16 @@ This repository provides code to enable your server to use authentication with N
 
 ## Main differences
 
-* North only supports the SSE transport (to be replaced by StreamableHTTP) and the stdio transport.
+* North only supports the StreamableHTTP transport. The sse transport is deprecated, it will work for backwards compatibility, but you shouldn't use it if you are creating new servers
 * You can protect all requests to your server with a secret.
 * You can access the user's OAuth token to interact with third-party services on their behalf.
 * You can access the user's identity (from the identity provider used with North).
+
+## Examples
+
+This repository contains example servers that you can use as a quickstart. You can find them in the [examples directory](https://github.com/cohere-ai/north-mcp-python-sdk/tree/main/examples).
+
+There are 2 examples, one that uses the auth to get the user making the tool call, and the other one shows how to send the right metadata so that the North UI can display the tool call results correctly.
 
 
 ## Authentication
@@ -33,7 +39,7 @@ mcp = NorthMCPServer(name="Demo", port=5222, server_secret="secret")
 ```
 
 #### I want to get the identity of the north user that is calling my server
-Refer to `examples/server.py`. During your request call the following:
+Refer to `examples/server_with_auth.py`. During your request call the following:
 ```python
 user = get_authenticated_user()
 print(user.email)
@@ -57,7 +63,7 @@ npx @modelcontextprotocol/inspector
 If authentication is not required and you just want to run it locally, you can choose the stdio transport. Navigate to the [MCP Inspector](http://127.0.0.1:6274) and configure it as follows:
 * Transport Type: stdio
 * Command: uv
-* Arguments: run examples/server.py --transport stdio
+* Arguments: run examples/server_with_auth.py --transport stdio
 
 From here:
 * Click "Connect"
@@ -68,17 +74,17 @@ From here:
 
 ### Adding authentication
 
-If you want to test the authentication mechanism locally you can do the following. First start the server with the sse transport:
+If you want to test the authentication mechanism locally you can do the following. First start the server with the streamable http transport:
 
 ```
-uv run examples/server.py --transport sse
+uv run examples/server_with_auth.py --transport streamable-http
 ```
 
 Next, create a bearer token. You can generate one using `examples/create_bearer_token.py` or use a pre-made one.
 
 Navigate to the MCP Inspector and configure it like this:
-* Transport Type: SSE
-* URL: http://localhost:5222/sse
+* Transport Type: Streamable HTTP
+* URL: http://localhost:5222/mcp
 * Authentication -> Bearer token: eyJzZXJ2ZXJfc2VjcmV0IjogInNlcnZlcl9zZWNyZXQiLCAidXNlcl9pZF90b2tlbiI6ICJleUpoYkdjaU9pSklVekkxTmlJc0luUjVjQ0k2SWtwWFZDSjkuZXlKbGJXRnBiQ0k2SW5SbGMzUkFZMjl0Y0dGdWVTNWpiMjBpZlEuV0pjckVUUi1MZnFtX2xrdE9vdjd0Q1ktTmZYR2JuYTVUMjhaeFhTaEZ4SSIsICJjb25uZWN0b3JfYWNjZXNzX3Rva2VucyI6IHsiZ29vZ2xlIjogImFiYyJ9fQ==
 
 Follow the same process as before. When you call the tool, you should see the following log in the terminal where you started the server:

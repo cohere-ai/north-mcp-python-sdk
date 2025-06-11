@@ -1,3 +1,4 @@
+# This is just a test script to generate a fake token.
 import argparse
 import json
 from base64 import b64encode
