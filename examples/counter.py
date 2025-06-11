@@ -1,4 +1,3 @@
-import argparse
 import traceback
 from collections import defaultdict
 
@@ -56,15 +55,4 @@ def increment() -> str:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Run the MCP server with configurable transport."
-    )
-    parser.add_argument(
-        "--transport",
-        choices=["stdio", "sse"],
-        default="sse",
-        help="Transport method to use (default: sse)",
-    )
-    args = parser.parse_args()
-
-    mcp.run(transport=args.transport)
+    mcp.run(transport="streamable-http")
