@@ -25,8 +25,10 @@ class AuthenticatedNorthUser(BaseUser):
         self,
         connector_access_tokens: dict[str, str],
         email: str | None = None,
+        user_id: str | None = None,
     ):
         self.connector_access_tokens = connector_access_tokens
+        self.user_id = user_id
         self.email = email
 
 
@@ -86,6 +88,7 @@ class NorthAuthBackend(AuthenticationBackend):
     async def authenticate(
         self, conn: HTTPConnection
     ) -> tuple[AuthCredentials, BaseUser] | None:
+        north_user_id = conn.headers.get("x-north-user-id")
         auth_header = conn.headers.get("Authorization")
 
         if not auth_header:
@@ -117,11 +120,14 @@ class NorthAuthBackend(AuthenticationBackend):
                 email = user_id_token.get("email")
 
                 return AuthCredentials(), AuthenticatedNorthUser(
-                    connector_access_tokens=tokens.connector_access_tokens, email=email
+                    connector_access_tokens=tokens.connector_access_tokens,
+                    user_id=north_user_id,
+                    email=email,
                 )
             except Exception:
                 raise AuthenticationError("invalid user id token")
 
         return AuthCredentials(), AuthenticatedNorthUser(
             connector_access_tokens=tokens.connector_access_tokens,
+            user_id=north_user_id,
         )
