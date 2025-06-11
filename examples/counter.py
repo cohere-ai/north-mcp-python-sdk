@@ -22,8 +22,8 @@ def setup(count: int) -> str:
         traceback.print_exc()
         user = default_user
 
-    print(f"'reset' ('count': {count}) was called by: {user.email}")
-    counts[user.email] = count
+    print(f"'reset' ('count': {count}) was called by: {user.user_id}")
+    counts[user.user_id] = count
     return "success"
 
 
@@ -36,8 +36,8 @@ def count() -> int:
         traceback.print_exc()
         user = default_user
 
-    print(f"'count' was called by: {user.email}")
-    return counts[user.email]
+    print(f"'count' was called by: {user.user_id}")
+    return counts[user.user_id]
 
 
 @mcp.tool()
@@ -49,8 +49,8 @@ def increment() -> str:
         traceback.print_exc()
         user = default_user
 
-    print(f"'increment' was called by: {user.email}")
-    counts[user.email] += 1
+    print(f"'increment' was called by: {user.user_id}")
+    counts[user.user_id] += 1
     return "success"
 
 
