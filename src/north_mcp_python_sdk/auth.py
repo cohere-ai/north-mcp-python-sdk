@@ -31,6 +31,10 @@ class AuthenticatedNorthUser(BaseUser):
         self.email = email
 
 
+auth_tokens_context_var = contextvars.ContextVar[AuthHeaderTokens | None](
+    "north_auth_tokens_context", default=None
+)
+
 auth_context_var = contextvars.ContextVar[AuthenticatedNorthUser | None](
     "north_auth_context", default=None
 )
@@ -38,6 +42,23 @@ auth_context_var = contextvars.ContextVar[AuthenticatedNorthUser | None](
 
 def on_auth_error(request: HTTPConnection, exc: AuthenticationError) -> JSONResponse:
     return JSONResponse({"error": str(exc)}, status_code=401)
+
+
+def get_auth_tokens() -> AuthHeaderTokens:
+    """
+    Get the raw authentication tokens from the current request context.
+    
+    Returns:
+        AuthHeaderTokens: The parsed auth header containing server_secret, 
+                         user_id_token, and connector_access_tokens
+    
+    Raises:
+        Exception: If no auth tokens are found in the current context
+    """
+    tokens = auth_tokens_context_var.get()
+    if not tokens:
+        raise Exception("auth tokens not found in context")
+    return tokens
 
 
 def get_authenticated_user() -> AuthenticatedNorthUser:
@@ -74,13 +95,21 @@ class AuthContextMiddleware:
             self.logger.debug("Authentication failed: user not found in context. User type: %s", type(user))
             raise AuthenticationError("user not found in context")
 
-        self.logger.debug("Setting authenticated user in context: email=%s, connectors=%s", user.email, list(user.connector_access_tokens.keys()))
+        # Get the auth tokens from the scope
+        auth_tokens = scope.get("auth_tokens")
+        if not isinstance(auth_tokens, AuthHeaderTokens):
+            self.logger.debug("Auth tokens not found in scope")
+            raise AuthenticationError("auth tokens not found in scope")
 
-        token = auth_context_var.set(user)
+        self.logger.debug("Setting authenticated user and tokens in context: email=%s, connectors=%s", user.email, list(user.connector_access_tokens.keys()))
+
+        user_token = auth_context_var.set(user)
+        tokens_token = auth_tokens_context_var.set(auth_tokens)
         try:
             await self.app(scope, receive, send)
         finally:
-            auth_context_var.reset(token)
+            auth_context_var.reset(user_token)
+            auth_tokens_context_var.reset(tokens_token)
 
 
 class NorthAuthBackend(AuthenticationBackend):
@@ -124,6 +153,10 @@ class NorthAuthBackend(AuthenticationBackend):
             tokens = AuthHeaderTokens.model_validate_json(decoded_auth_header)
             self.logger.debug("Successfully parsed auth tokens. Has server_secret: %s, Has user_id_token: %s, Connector count: %d", tokens.server_secret is not None, tokens.user_id_token is not None, len(tokens.connector_access_tokens))
             self.logger.debug("Available connectors: %s", list(tokens.connector_access_tokens.keys()))
+            
+            # Store tokens in scope for later access
+            conn.scope["auth_tokens"] = tokens
+            
         except ValidationError as e:
             self.logger.debug("Failed to validate auth tokens: %s", e)
             raise AuthenticationError("unable to decode bearer token")

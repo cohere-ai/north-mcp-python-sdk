@@ -8,7 +8,7 @@ from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.authentication import AuthenticationMiddleware
 
-from .auth import AuthContextMiddleware, NorthAuthBackend, on_auth_error
+from .auth import AuthContextMiddleware, NorthAuthBackend, on_auth_error, get_auth_tokens
 
 
 def is_debug_mode() -> bool:
