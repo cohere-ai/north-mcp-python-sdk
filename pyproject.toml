@@ -1,11 +1,14 @@
 [project]
 name = "north-mcp-python-sdk"
 version = "0.1.1"
-description = "Add your description here"
+description = "Python SDK for creating MCP servers for North."
 readme = "README.md"
 authors = [{ name = "Raphael Cristal", email = "raphael@cohere.com" }]
 requires-python = ">=3.11"
-dependencies = ["mcp>=1.9.0,<1.10.0", "pyjwt>=2.10.1"]
+dependencies = [
+    "mcp>=1.9.0", 
+    "pyjwt>=2.10.1"
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -18,7 +21,6 @@ dev = [
     "pytest-asyncio>=0.26.0",
     "trio>=0.30.0",
 ]
-
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
