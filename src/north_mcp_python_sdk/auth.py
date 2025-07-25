@@ -31,6 +31,75 @@ class AuthenticatedNorthUser(BaseUser):
         self.email = email
 
 
+class NorthAuthenticationMiddleware:
+    """
+    North's default authentication middleware that only applies authentication 
+    to MCP protocol paths (/mcp, /sse). Custom routes bypass authentication entirely.
+    
+    This is the standard authentication behavior for North MCP servers:
+    - MCP protocol routes (/mcp, /sse) require authentication
+    - All custom routes added via @mcp.custom_route() work without authentication
+    - No configuration needed - this behavior is automatic
+    """
+
+    def __init__(
+        self, 
+        app: ASGIApp, 
+        backend: AuthenticationBackend,
+        on_error,
+        protected_paths: list[str] | None = None,
+        debug: bool = False
+    ):
+        self.app = app
+        self.backend = backend
+        self.on_error = on_error
+        # Default protected paths - only MCP protocol routes require auth
+        self.protected_paths = protected_paths or ["/mcp", "/sse"]
+        self.debug = debug
+        self.logger = logging.getLogger("NorthMCP.Auth")
+        if debug:
+            self.logger.setLevel(logging.DEBUG)
+
+    def _should_authenticate(self, path: str) -> bool:
+        """
+        Check if the given path requires authentication.
+        Only MCP protocol paths (/mcp, /sse) require auth by default.
+        """
+        return any(path.startswith(protected) for protected in self.protected_paths)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send):
+        if scope["type"] == "lifespan":
+            return await self.app(scope, receive, send)
+
+        path = scope.get("path", "")
+        
+        if not self._should_authenticate(path):
+            self.logger.debug("Path %s does not require authentication, bypassing", path)
+            # For non-protected paths, create a minimal unauthenticated user
+            scope["user"] = None
+            scope["auth"] = AuthCredentials()
+            return await self.app(scope, receive, send)
+
+        self.logger.debug("Path %s requires authentication", path)
+        
+        # Apply authentication for protected paths
+        conn = HTTPConnection(scope)
+        try:
+            auth_result = await self.backend.authenticate(conn)
+        except AuthenticationError as exc:
+            response = self.on_error(conn, exc)
+            return await response(scope, receive, send)
+
+        if auth_result is None:
+            auth, user = AuthCredentials(), None
+        else:
+            auth, user = auth_result
+
+        scope["user"] = user
+        scope["auth"] = auth
+        await self.app(scope, receive, send)
+
+
 auth_context_var = contextvars.ContextVar[AuthenticatedNorthUser | None](
     "north_auth_context", default=None
 )
@@ -46,6 +115,11 @@ def get_authenticated_user() -> AuthenticatedNorthUser:
         raise Exception("user not found in context")
 
     return user
+
+
+def get_authenticated_user_optional() -> AuthenticatedNorthUser | None:
+    """Get the authenticated user if available, or None for custom routes."""
+    return auth_context_var.get()
 
 
 class AuthContextMiddleware:
@@ -70,6 +144,17 @@ class AuthContextMiddleware:
             return await self.app(scope, receive, send)
 
         user = scope.get("user")
+        
+        # For custom routes that don't require auth, user will be None
+        if user is None:
+            self.logger.debug("No authentication required for this route")
+            token = auth_context_var.set(None)
+            try:
+                await self.app(scope, receive, send)
+            finally:
+                auth_context_var.reset(token)
+            return
+        
         if not isinstance(user, AuthenticatedNorthUser):
             self.logger.debug("Authentication failed: user not found in context. User type: %s", type(user))
             raise AuthenticationError("user not found in context")
@@ -91,7 +176,7 @@ class NorthAuthBackend(AuthenticationBackend):
     def __init__(self, server_secret: str | None = None, debug: bool = False):
         self._server_secret = server_secret
         self.debug = debug
-        self.logger = logging.getLogger("NorthMCP.Auth")
+        self.logger = logging.getLogger("NorthMCP.AuthBackend")
         if debug:
             self.logger.setLevel(logging.DEBUG)
 
