@@ -5,7 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 authors = [{ name = "Raphael Cristal", email = "raphael@cohere.com" }]
 requires-python = ">=3.11"
-dependencies = ["mcp>=1.9.0,<1.10.0", "pyjwt>=2.10.1"]
+dependencies = ["mcp==1.11.0", "pyjwt>=2.10.1"]
 
 [build-system]
 requires = ["hatchling"]
