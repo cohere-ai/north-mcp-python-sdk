@@ -34,6 +34,9 @@ class AuthenticatedNorthUser(BaseUser):
 auth_context_var = contextvars.ContextVar[AuthenticatedNorthUser | None](
     "north_auth_context", default=None
 )
+headers_context_var = contextvars.ContextVar[dict[str, str]](
+    "north_headers_context", default={}
+)
 
 
 def on_auth_error(request: HTTPConnection, exc: AuthenticationError) -> JSONResponse:
@@ -46,6 +49,13 @@ def get_authenticated_user() -> AuthenticatedNorthUser:
         raise Exception("user not found in context")
 
     return user
+
+def get_headers() -> dict[str, str]:
+    headers = headers_context_var.get()
+    if not headers:
+        raise Exception("headers not found in context")
+
+    return headers
 
 
 class AuthContextMiddleware:
@@ -76,12 +86,39 @@ class AuthContextMiddleware:
 
         self.logger.debug("Setting authenticated user in context: email=%s, connectors=%s", user.email, list(user.connector_access_tokens.keys()))
 
+        headers = {k.lower(): v for k, v in scope.get("headers", [])}
+        headers_context_var.set(headers)
+
         token = auth_context_var.set(user)
         try:
             await self.app(scope, receive, send)
         finally:
             auth_context_var.reset(token)
 
+class HeadersContextMiddleware:
+    """
+    Middleware that sets the request headers in a contextvar for easy access
+    throughout the request lifecycle.
+    """
+
+    def __init__(self, app: ASGIApp, debug: bool = False):
+        self.app = app
+        self.debug = debug
+        self.logger = logging.getLogger("NorthMCP.HeadersContext")
+        if debug:
+            self.logger.setLevel(logging.DEBUG)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send):
+        if scope["type"] == "lifespan":
+            return await self.app(scope, receive, send)
+
+        headers = dict(scope.get("headers", {}))
+        self.logger.debug("Setting request headers in context: %s", headers)
+        token = headers_context_var.set(headers)
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            headers_context_var.reset(token)
 
 class NorthAuthBackend(AuthenticationBackend):
     """

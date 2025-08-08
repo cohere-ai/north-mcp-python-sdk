@@ -8,7 +8,7 @@ from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.authentication import AuthenticationMiddleware
 
-from .auth import AuthContextMiddleware, NorthAuthBackend, on_auth_error
+from .auth import AuthContextMiddleware, NorthAuthBackend, on_auth_error, HeadersContextMiddleware
 
 
 def is_debug_mode() -> bool:
@@ -66,5 +66,6 @@ class NorthMCPServer(FastMCP):
                 on_error=on_auth_error,
             ),
             Middleware(AuthContextMiddleware, debug=self._debug),
+            Middleware(HeadersContextMiddleware, debug=self._debug),
         ]
         app.user_middleware.extend(middleware)
