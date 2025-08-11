@@ -21,6 +21,7 @@ This repository provides code to enable your server to use authentication with N
 * You can access the user's OAuth token to interact with third-party services on their behalf.
 * You can access the user's identity (from the identity provider used with North).
 * **Debug mode** for detailed authentication logging and troubleshooting.
+* **Tool namespacing** to prevent tool name collisions between multiple MCP servers.
 
 ## Examples
 
@@ -103,6 +104,71 @@ See the - `examples/server_with_debug.py` for a debug mode for an example:
 ### Security Note
 
 Debug mode logs sensitive information including request headers and token metadata. **Never enable debug mode in production environments** as it may expose authentication details in logs.
+
+## Tool Namespacing
+
+The North MCP SDK includes automatic tool namespacing to prevent tool name collisions when multiple MCP servers are used together. This feature is **enabled by default**.
+
+### Basic Usage
+
+```python
+from north_mcp_python_sdk import NorthMCPServer
+
+# Create server with namespacing enabled (default)
+mcp = NorthMCPServer("Demo Calculator", port=5222)
+
+@mcp.tool()
+def add(a: int, b: int) -> int:
+    """Add two numbers"""
+    return a + b
+
+# Tool will be registered as: demo_calculator_add
+```
+
+### Examples of Namespace Normalization
+
+| Server Name | Tool Name | Resulting Namespaced Tool |
+|-------------|-----------|--------------------------|
+| `"Demo"` | `add` | `demo_add` |
+| `"Slack Dev"` | `list_channels` | `slack_dev_list_channels` |
+| `"Calculator 2.0!"` | `multiply` | `calculator_2_0_multiply` |
+
+### Disabling Namespacing
+
+```python
+# Disable namespacing for backwards compatibility
+mcp = NorthMCPServer("Simple Server", namespace=False)
+
+@mcp.tool()
+def add(a: int, b: int) -> int:
+    return a + b
+
+# Tool will be registered as: add (no namespace prefix)
+```
+
+### Preventing Tool Name Collisions
+
+With namespacing, multiple servers can use the same tool names without conflicts:
+
+```python
+# Calculator server
+calc_server = NorthMCPServer("Calculator", port=5222)
+
+@calc_server.tool()
+def add(a: int, b: int) -> int:
+    return a + b
+
+# Slack server  
+slack_server = NorthMCPServer("Slack Dev", port=5223)
+
+@slack_server.tool()
+def add(channel: str, user: str) -> dict:
+    return {"added": user, "to": channel}
+
+# Results in tools: calculator_add and slack_dev_add
+```
+
+For detailed information about tool namespacing, see [docs/TOOL_NAMESPACING.md](docs/TOOL_NAMESPACING.md).
 
 ## Local Development without North
 
