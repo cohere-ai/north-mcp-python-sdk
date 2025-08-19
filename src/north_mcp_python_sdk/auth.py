@@ -33,13 +33,20 @@ class AuthenticatedNorthUser(BaseUser):
 
 class NorthAuthenticationMiddleware:
     """
-    North's default authentication middleware that only applies authentication 
-    to MCP protocol paths (/mcp, /sse). Custom routes bypass authentication entirely.
+    North's authentication middleware for MCP servers that applies authentication 
+    only to MCP protocol endpoints (/mcp, /sse). Custom routes bypass authentication
+    and are intended for operational purposes like Kubernetes health checks.
     
-    This is the standard authentication behavior for North MCP servers:
-    - MCP protocol routes (/mcp, /sse) require authentication
-    - All custom routes added via @mcp.custom_route() work without authentication
-    - No configuration needed - this behavior is automatic
+    MCP servers typically only need two authenticated endpoints:
+    - /mcp: JSON-RPC protocol endpoint for MCP communication
+    - /sse: Server-sent events endpoint for streaming transport
+    
+    Custom routes are automatically public and designed for:
+    - Kubernetes liveness/readiness probes (/health, /ready)
+    - Monitoring and metrics endpoints (/metrics, /status)
+    - Other operational/orchestration needs
+    
+    No configuration needed - this behavior follows MCP best practices.
     """
 
     def __init__(
@@ -65,7 +72,7 @@ class NorthAuthenticationMiddleware:
         Check if the given path requires authentication.
         Only MCP protocol paths (/mcp, /sse) require auth by default.
         """
-        return any(path.startswith(protected) for protected in self.protected_paths)
+        return path in self.protected_paths
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send):
         if scope["type"] == "lifespan":
@@ -74,13 +81,17 @@ class NorthAuthenticationMiddleware:
         path = scope.get("path", "")
         
         if not self._should_authenticate(path):
-            self.logger.debug("Path %s does not require authentication, bypassing", path)
+            self.logger.debug(
+                "Path %s is a custom route (likely operational endpoint like health check), "
+                "bypassing authentication as intended for k8s/orchestration use", 
+                path
+            )
             # For non-protected paths, create a minimal unauthenticated user
             scope["user"] = None
             scope["auth"] = AuthCredentials()
             return await self.app(scope, receive, send)
 
-        self.logger.debug("Path %s requires authentication", path)
+        self.logger.debug("Path %s is an MCP protocol endpoint, applying authentication", path)
         
         # Apply authentication for protected paths
         conn = HTTPConnection(scope)
@@ -147,7 +158,7 @@ class AuthContextMiddleware:
         
         # For custom routes that don't require auth, user will be None
         if user is None:
-            self.logger.debug("No authentication required for this route")
+            self.logger.debug("Custom route accessed without authentication (operational endpoint)")
             token = auth_context_var.set(None)
             try:
                 await self.app(scope, receive, send)
