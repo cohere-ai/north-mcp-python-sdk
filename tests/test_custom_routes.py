@@ -1,15 +1,13 @@
-#!/usr/bin/env python3
 """
 Test script to verify that custom routes work without authentication
 while MCP routes still require authentication using North's default
 smart authentication middleware.
 """
 
-import asyncio
 import json
 import base64
-from typing import Any
-
+import pytest
+import pytest_asyncio
 import httpx
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse
@@ -20,7 +18,7 @@ from north_mcp_python_sdk.auth import get_authenticated_user_optional
 
 def create_test_server() -> NorthMCPServer:
     """Create a test server with custom routes and MCP tools."""
-    mcp = NorthMCPServer("TestServer", server_secret="test-secret", port=8080)
+    mcp = NorthMCPServer("TestServer", server_secret="test-secret")
 
     @mcp.tool()
     def test_tool(message: str) -> str:
@@ -76,117 +74,97 @@ def create_auth_header() -> str:
     return f"Bearer {encoded}"
 
 
-async def test_custom_routes_without_auth():
-    """Test that custom routes work without authentication."""
-    print("🧪 Testing custom routes without authentication...")
-    
-    async with httpx.AsyncClient() as client:
-        # Test health endpoint
-        response = await client.get("http://localhost:8080/health")
-        assert response.status_code == 200
-        assert response.text == "OK"
-        print("✅ /health endpoint works without auth")
-        
-        # Test status endpoint
-        response = await client.get("http://localhost:8080/status")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "running"
-        assert data["authenticated"] == False
-        print("✅ /status endpoint works without auth")
-        
-        # Test auth-info endpoint without auth
-        response = await client.get("http://localhost:8080/auth-info")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["authenticated"] == False
-        print("✅ /auth-info endpoint works without auth")
-
-
-async def test_mcp_routes_require_auth():
-    """Test that MCP routes require authentication."""
-    print("\n🔒 Testing MCP routes require authentication...")
-    
-    async with httpx.AsyncClient() as client:
-        # Test MCP endpoint without auth (should fail)
-        response = await client.post("http://localhost:8080/mcp", json={
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {}
-        })
-        assert response.status_code == 401
-        print("✅ /mcp endpoint requires auth (401 without auth)")
-        
-        # Test MCP endpoint with auth (should work)
-        headers = {"Authorization": create_auth_header()}
-        response = await client.post("http://localhost:8080/mcp", json={
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {}
-        }, headers=headers)
-        # Should not be 401 (might be other errors but not auth)
-        assert response.status_code != 401
-        print("✅ /mcp endpoint works with auth")
-
-
-async def test_custom_routes_with_optional_auth():
-    """Test that custom routes can optionally use auth info."""
-    print("\n🔓 Testing custom routes with optional authentication...")
-    
-    async with httpx.AsyncClient() as client:
-        # Test auth-info endpoint with auth
-        headers = {"Authorization": create_auth_header()}
-        response = await client.get("http://localhost:8080/auth-info", headers=headers)
-        assert response.status_code == 200
-        data = response.json()
-        # Note: will be False because we don't have a valid user_id_token in our test
-        # but the important thing is that it doesn't return 401
-        print("✅ /auth-info endpoint accepts optional auth")
-
-
-async def run_tests():
-    """Run all tests."""
+@pytest_asyncio.fixture
+async def test_client():
+    """Create test client for custom routes testing."""
     server = create_test_server()
-    
-    print("🚀 Starting test server...")
-    
-    # Start server in background
-    import threading
-    import time
-    
-    def run_server():
-        server.run(transport="streamable-http")
-    
-    server_thread = threading.Thread(target=run_server, daemon=True)
-    server_thread.start()
-    
-    # Wait for server to start
-    print("⏳ Waiting for server to start...")
-    time.sleep(2)
-    
-    try:
-        await test_custom_routes_without_auth()
-        await test_mcp_routes_require_auth()
-        await test_custom_routes_with_optional_auth()
-        
-        print("\n🎉 All tests passed!")
-        print("\n📋 Summary:")
-        print("   ✅ Custom routes work without authentication")
-        print("   ✅ MCP routes require authentication")
-        print("   ✅ Custom routes can optionally use authentication")
-        print("\nNorth MCP's smart authentication works perfectly:")
-        print("- @mcp.custom_route() creates routes that automatically bypass auth")
-        print("- Only /mcp and /sse routes require authentication")
-        print("- This is the default behavior - no configuration needed!")
-        
-    except Exception as e:
-        print(f"\n❌ Test failed: {e}")
-        raise
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=server.streamable_http_app()), 
+        base_url="http://test"
+    ) as client:
+        yield client
 
 
-if __name__ == "__main__":
-    print("Testing North MCP Custom Routes")
-    print("=" * 50)
-    asyncio.run(run_tests())
+@pytest_asyncio.fixture
+async def sse_test_client():
+    """Create test client for SSE routes testing."""
+    server = create_test_server()
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=server.sse_app()), 
+        base_url="http://test"
+    ) as client:
+        yield client
+
+
+@pytest.mark.asyncio
+async def test_custom_routes_without_auth(test_client):
+    """Test that custom routes work without authentication."""
+    # Test health endpoint
+    response = await test_client.get("/health")
+    assert response.status_code == 200
+    assert response.text == "OK"
+    
+    # Test status endpoint
+    response = await test_client.get("/status")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "running"
+    assert data["authenticated"] == False
+    
+    # Test auth-info endpoint without auth
+    response = await test_client.get("/auth-info")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["authenticated"] == False
+
+
+@pytest.mark.asyncio
+async def test_mcp_routes_require_auth(test_client):
+    """Test that MCP routes require authentication."""
+    # Test MCP endpoint without auth (should fail)
+    response = await test_client.post("/mcp", json={
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {}
+    })
+    assert response.status_code == 401
+    
+    # Test MCP endpoint with auth (should work)
+    headers = {"Authorization": create_auth_header()}
+    response = await test_client.post("/mcp", json={
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {}
+    }, headers=headers)
+    # Should not be 401 (might be other errors but not auth)
+    assert response.status_code != 401
+
+
+@pytest.mark.asyncio
+async def test_sse_routes_require_auth(sse_test_client):
+    """Test that SSE routes require authentication."""
+    # Test SSE endpoint without auth (should fail)
+    response = await sse_test_client.get("/sse")
+    assert response.status_code == 401
+    
+    # For SSE endpoint with auth, we just verify it doesn't return 401
+    # Note: SSE endpoints are streaming and will hang on successful auth,
+    # so we test auth validation only by checking invalid auth still returns 401
+    headers = {"Authorization": "Bearer invalid"}
+    response = await sse_test_client.get("/sse", headers=headers)
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_custom_routes_with_optional_auth(test_client):
+    """Test that custom routes can optionally use auth info."""
+    # Test auth-info endpoint with auth
+    headers = {"Authorization": create_auth_header()}
+    response = await test_client.get("/auth-info", headers=headers)
+    assert response.status_code == 200
+    data = response.json()
+    # Note: will be False because we don't have a valid user_id_token in our test
+    # but the important thing is that it doesn't return 401
+    assert response.status_code == 200

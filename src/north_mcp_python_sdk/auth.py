@@ -239,6 +239,10 @@ class NorthAuthBackend(AuthenticationBackend):
                 email = user_id_token.get("email")
                 
                 self.logger.debug("Successfully decoded user ID token. Email: %s", email)
+                
+                if not email:
+                    self.logger.debug("Authentication failed: no email found in user ID token")
+                    raise AuthenticationError("email required in user id token")
 
                 return AuthCredentials(), AuthenticatedNorthUser(
                     connector_access_tokens=tokens.connector_access_tokens, email=email
