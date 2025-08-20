@@ -3,7 +3,6 @@ import contextvars
 import json
 import logging
 import urllib.request
-import urllib.parse
 
 import jwt
 from jwt import PyJWKClient
@@ -268,7 +267,7 @@ class NorthAuthBackend(AuthenticationBackend):
             raise Exception("user id token issuer not trusted: %s" % issuer)
 
         openid_config_req = urllib.request.Request(
-            url=urllib.parse.urljoin(issuer, "/.well-known/openid-configuration")
+            url=issuer.rstrip("/") + "/.well-known/openid-configuration"
         )
         with urllib.request.urlopen(openid_config_req) as response:
             openid_config = json.load(response)
@@ -287,5 +286,5 @@ class NorthAuthBackend(AuthenticationBackend):
             key=jwks_client.get_signing_key(kid).key,
             algorithms=[algorithm],
             issuer=self._trusted_issuer_urls,
-            options={"verify_signature": True},
+            options={"verify_signature": True, "verify_aud": False},
         )
