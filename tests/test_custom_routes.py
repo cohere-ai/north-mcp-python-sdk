@@ -13,7 +13,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse
 
 from north_mcp_python_sdk import NorthMCPServer
-from north_mcp_python_sdk.auth import get_authenticated_user_optional
+from north_mcp_python_sdk.auth import get_authenticated_user
 
 
 def create_test_server() -> NorthMCPServer:
@@ -23,7 +23,10 @@ def create_test_server() -> NorthMCPServer:
     @mcp.tool()
     def test_tool(message: str) -> str:
         """A test tool that requires authentication."""
-        user = get_authenticated_user_optional()
+        try:
+            user = get_authenticated_user()
+        except Exception:
+            user = None
         if user:
             return f"Authenticated tool call: {message} (user: {user.email})"
         else:
@@ -46,7 +49,10 @@ def create_test_server() -> NorthMCPServer:
     @mcp.custom_route("/auth-info", methods=["GET"])
     async def auth_info(request: Request) -> JSONResponse:
         """Show authentication info - works with or without auth."""
-        user = get_authenticated_user_optional()
+        try:
+            user = get_authenticated_user()
+        except Exception:
+            user = None
         if user:
             return JSONResponse({
                 "authenticated": True,

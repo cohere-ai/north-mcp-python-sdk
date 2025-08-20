@@ -112,11 +112,6 @@ def get_authenticated_user() -> AuthenticatedNorthUser:
     return user
 
 
-def get_authenticated_user_optional() -> AuthenticatedNorthUser | None:
-    """Get the authenticated user if available, or None for custom routes."""
-    return auth_context_var.get()
-
-
 class AuthContextMiddleware:
     """
     Middleware that extracts the authenticated user from the request

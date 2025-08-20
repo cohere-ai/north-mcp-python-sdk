@@ -2,7 +2,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse
 
 from north_mcp_python_sdk import NorthMCPServer
-from north_mcp_python_sdk.auth import get_authenticated_user, get_authenticated_user_optional
+from north_mcp_python_sdk.auth import get_authenticated_user
 
 # MCP server with operational endpoints for container orchestration
 mcp = NorthMCPServer("MCP Server with K8s Endpoints", port=5222)
@@ -59,7 +59,10 @@ mcp_tools_total 1
 @mcp.custom_route("/status", methods=["GET"])
 async def status_check(request: Request) -> JSONResponse:
     """General status endpoint for monitoring dashboards"""
-    user = get_authenticated_user_optional()
+    try:
+        user = get_authenticated_user()
+    except Exception:
+        user = None
     
     # This endpoint works without auth but can show auth info if provided
     status_data = {

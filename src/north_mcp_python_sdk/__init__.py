@@ -7,7 +7,7 @@ from mcp.server.fastmcp import FastMCP
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 
-from .auth import AuthContextMiddleware, NorthAuthBackend, NorthAuthenticationMiddleware, on_auth_error, get_authenticated_user_optional
+from .auth import AuthContextMiddleware, NorthAuthBackend, NorthAuthenticationMiddleware, on_auth_error
 
 
 def is_debug_mode() -> bool:
@@ -78,7 +78,6 @@ class NorthMCPServer(FastMCP):
 
 # Convenience exports
 __all__ = [
-    "NorthMCPServer",
-    "get_authenticated_user_optional",
+    "NorthMCPServer", 
     "is_debug_mode",
 ]
