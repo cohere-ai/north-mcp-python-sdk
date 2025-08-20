@@ -21,6 +21,7 @@ class NorthMCPServer(FastMCP):
         name: str | None = None,
         instructions: str | None = None,
         server_secret: str | None = None,
+        trusted_issuer_urls: list[str] | None = None,
         auth_server_provider: OAuthAuthorizationServerProvider[Any, Any, Any]
         | None = None,
         debug: bool | None = None,
@@ -28,13 +29,14 @@ class NorthMCPServer(FastMCP):
     ):
         super().__init__(name, instructions, auth_server_provider, **settings)
         self._server_secret = server_secret
-        
+        self._trusted_issuer_urls = trusted_issuer_urls
+
         # Auto-enable debug mode from environment variable if not explicitly set
         if debug is None:
             self._debug = is_debug_mode()
         else:
             self._debug = debug
-        
+
         # Configure logging for debug mode
         if self._debug:
             logging.basicConfig(

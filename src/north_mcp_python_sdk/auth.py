@@ -163,8 +163,14 @@ class NorthAuthBackend(AuthenticationBackend):
     Authentication backend that validates Bearer tokens.
     """
 
-    def __init__(self, server_secret: str | None = None, debug: bool = False):
+    def __init__(
+        self,
+        server_secret: str | None = None,
+        trusted_issuer_urls: list[str] | None = None,
+        debug: bool = False,
+    ):
         self._server_secret = server_secret
+        self._trusted_issuer_urls = trusted_issuer_urls
         self.debug = debug
         self.logger = logging.getLogger("NorthMCP.AuthBackend")
         if debug:
@@ -207,31 +213,30 @@ class NorthAuthBackend(AuthenticationBackend):
             self.logger.debug("Server secret mismatch - access denied")
             raise AuthenticationError("access denied")
 
-        if tokens.user_id_token:
-            try:
+        if not tokens.user_id_token:
+            self.logger.debug("Authentication successful without user ID token")
+            return AuthCredentials(), AuthenticatedNorthUser(
+                connector_access_tokens=tokens.connector_access_tokens,
+            )
+
+        try:
+            if self._trusted_issuer_urls:
                 user_id_token = jwt.decode(
                     jwt=tokens.user_id_token,
-                    verify=False,
+                    issuer=self._trusted_issuer_urls,
+                    options={"verify_signature": True},
+                )
+            else:
+                user_id_token = jwt.decode(
+                    jwt=tokens.user_id_token,
                     options={"verify_signature": False},
                 )
 
-                email = user_id_token.get("email")
-                
-                self.logger.debug("Successfully decoded user ID token. Email: %s", email)
-                
-                if not email:
-                    self.logger.debug("Authentication failed: no email found in user ID token")
-                    raise AuthenticationError("email required in user id token")
-
-                return AuthCredentials(), AuthenticatedNorthUser(
-                    connector_access_tokens=tokens.connector_access_tokens, email=email
-                )
-            except Exception as e:
-                self.logger.debug("Failed to decode user ID token: %s", e)
-                raise AuthenticationError("invalid user id token")
-
-        self.logger.debug("Authentication successful without user ID token")
-
-        return AuthCredentials(), AuthenticatedNorthUser(
-            connector_access_tokens=tokens.connector_access_tokens,
-        )
+            email = user_id_token.get("email")
+            self.logger.debug("Successfully decoded user ID token. Email: %s", email)
+            return AuthCredentials(), AuthenticatedNorthUser(
+                connector_access_tokens=tokens.connector_access_tokens, email=email
+            )
+        except Exception as e:
+            self.logger.debug("Failed to decode user ID token: %s", e)
+            raise AuthenticationError("invalid user id token")
