@@ -10,6 +10,7 @@ from starlette.authentication import (
     AuthenticationError,
     BaseUser,
 )
+from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.requests import HTTPConnection
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -31,7 +32,7 @@ class AuthenticatedNorthUser(BaseUser):
         self.email = email
 
 
-class NorthAuthenticationMiddleware:
+class NorthAuthenticationMiddleware(AuthenticationMiddleware):
     """
     North's authentication middleware for MCP servers that applies authentication 
     only to MCP protocol endpoints (/mcp, /sse). Custom routes bypass authentication
@@ -57,9 +58,7 @@ class NorthAuthenticationMiddleware:
         protected_paths: list[str] | None = None,
         debug: bool = False
     ):
-        self.app = app
-        self.backend = backend
-        self.on_error = on_error
+        super().__init__(app, backend, on_error)
         # Default protected paths - only MCP protocol routes require auth
         self.protected_paths = protected_paths or ["/mcp", "/sse"]
         self.debug = debug
@@ -93,22 +92,7 @@ class NorthAuthenticationMiddleware:
 
         self.logger.debug("Path %s is an MCP protocol endpoint, applying authentication", path)
         
-        # Apply authentication for protected paths
-        conn = HTTPConnection(scope)
-        try:
-            auth_result = await self.backend.authenticate(conn)
-        except AuthenticationError as exc:
-            response = self.on_error(conn, exc)
-            return await response(scope, receive, send)
-
-        if auth_result is None:
-            auth, user = AuthCredentials(), None
-        else:
-            auth, user = auth_result
-
-        scope["user"] = user
-        scope["auth"] = auth
-        await self.app(scope, receive, send)
+        return await super().__call__(scope, receive, send)
 
 
 auth_context_var = contextvars.ContextVar[AuthenticatedNorthUser | None](
