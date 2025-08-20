@@ -1,8 +1,12 @@
 import base64
 import contextvars
+import json
 import logging
+import urllib.request
+import urllib.parse
 
 import jwt
+from jwt import PyJWKClient
 from pydantic import BaseModel, Field, ValidationError
 from starlette.authentication import (
     AuthCredentials,
@@ -146,10 +150,17 @@ class AuthContextMiddleware:
             return
         
         if not isinstance(user, AuthenticatedNorthUser):
-            self.logger.debug("Authentication failed: user not found in context. User type: %s", type(user))
+            self.logger.debug(
+                "Authentication failed: user not found in context. User type: %s",
+                type(user),
+            )
             raise AuthenticationError("user not found in context")
 
-        self.logger.debug("Setting authenticated user in context: email=%s, connectors=%s", user.email, list(user.connector_access_tokens.keys()))
+        self.logger.debug(
+            "Setting authenticated user in context: email=%s, connectors=%s",
+            user.email,
+            list(user.connector_access_tokens.keys()),
+        )
 
         token = auth_context_var.set(user)
         try:
@@ -203,8 +214,15 @@ class NorthAuthBackend(AuthenticationBackend):
 
         try:
             tokens = AuthHeaderTokens.model_validate_json(decoded_auth_header)
-            self.logger.debug("Successfully parsed auth tokens. Has server_secret: %s, Has user_id_token: %s, Connector count: %d", tokens.server_secret is not None, tokens.user_id_token is not None, len(tokens.connector_access_tokens))
-            self.logger.debug("Available connectors: %s", list(tokens.connector_access_tokens.keys()))
+            self.logger.debug(
+                "Successfully parsed auth tokens. Has server_secret: %s, Has user_id_token: %s, Connector count: %d",
+                tokens.server_secret is not None,
+                tokens.user_id_token is not None,
+                len(tokens.connector_access_tokens),
+            )
+            self.logger.debug(
+                "Available connectors: %s", list(tokens.connector_access_tokens.keys())
+            )
         except ValidationError as e:
             self.logger.debug("Failed to validate auth tokens: %s", e)
             raise AuthenticationError("unable to decode bearer token")
@@ -220,19 +238,18 @@ class NorthAuthBackend(AuthenticationBackend):
             )
 
         try:
+            decoded_token = jwt.decode(
+                jwt=tokens.user_id_token,
+                options={"verify_signature": False},
+            )
+
             if self._trusted_issuer_urls:
-                user_id_token = jwt.decode(
-                    jwt=tokens.user_id_token,
-                    issuer=self._trusted_issuer_urls,
-                    options={"verify_signature": True},
-                )
-            else:
-                user_id_token = jwt.decode(
-                    jwt=tokens.user_id_token,
-                    options={"verify_signature": False},
+                self._verify_token_signature(
+                    raw_token=tokens.user_id_token,
+                    decoded_token=decoded_token,
                 )
 
-            email = user_id_token.get("email")
+            email = decoded_token.get("email")
             self.logger.debug("Successfully decoded user ID token. Email: %s", email)
             return AuthCredentials(), AuthenticatedNorthUser(
                 connector_access_tokens=tokens.connector_access_tokens, email=email
@@ -240,3 +257,35 @@ class NorthAuthBackend(AuthenticationBackend):
         except Exception as e:
             self.logger.debug("Failed to decode user ID token: %s", e)
             raise AuthenticationError("invalid user id token")
+
+    def _verify_token_signature(self, raw_token: str, decoded_token: dict) -> None:
+        self.logger.debug("Verifying user ID token signature against trusted issuers")
+        issuer = decoded_token.get("iss")
+        if not issuer:
+            raise Exception("user id token issuer not found in token")
+
+        if issuer not in self._trusted_issuer_urls:
+            raise Exception("user id token issuer not trusted: %s" % issuer)
+
+        openid_config_req = urllib.request.Request(
+            url=urllib.parse.urljoin(issuer, "/.well-known/openid-configuration")
+        )
+        with urllib.request.urlopen(openid_config_req) as response:
+            openid_config = json.load(response)
+
+        unverified_header = jwt.get_unverified_header(jwt=raw_token)
+        jwks_client = PyJWKClient(openid_config["jwks_uri"], cache_keys=True)
+        kid, algorithm = unverified_header.get("kid"), unverified_header.get(
+            "alg", "RS256"
+        )
+        if not kid:
+            raise Exception("user id token header 'kid' not found")
+
+        # This will raise an exception if the signature is invalid
+        jwt.decode(
+            jwt=raw_token,
+            key=jwks_client.get_signing_key(kid).key,
+            algorithms=[algorithm],
+            issuer=self._trusted_issuer_urls,
+            options={"verify_signature": True},
+        )
