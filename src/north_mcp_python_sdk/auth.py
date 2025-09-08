@@ -35,12 +35,13 @@ class AuthenticatedNorthUser(BaseUser):
 class NorthAuthenticationMiddleware(AuthenticationMiddleware):
     """
     North's authentication middleware for MCP servers that applies authentication 
-    only to MCP protocol endpoints (/mcp, /sse). Custom routes bypass authentication
+    only to MCP protocol endpoints (/mcp, /sse, /messages/*). Custom routes bypass authentication
     and are intended for operational purposes like Kubernetes health checks.
     
-    MCP servers typically only need two authenticated endpoints:
+    MCP servers typically need these authenticated endpoints:
     - /mcp: JSON-RPC protocol endpoint for MCP communication
     - /sse: Server-sent events endpoint for streaming transport
+    - /messages/*: SSE message posting endpoints for client-to-server communication
     
     Custom routes are automatically public and designed for:
     - Kubernetes liveness/readiness probes (/health, /ready)
@@ -69,9 +70,17 @@ class NorthAuthenticationMiddleware(AuthenticationMiddleware):
     def _should_authenticate(self, path: str) -> bool:
         """
         Check if the given path requires authentication.
-        Only MCP protocol paths (/mcp, /sse) require auth by default.
+        Only MCP protocol paths (/mcp, /sse, /messages/*) require auth by default.
         """
-        return path in self.protected_paths
+
+        if path in self.protected_paths:
+            return True
+        
+        # for SSE servers
+        if path.startswith("/messages/"):
+            return True
+            
+        return False
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send):
         if scope["type"] == "lifespan":
