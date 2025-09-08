@@ -10,6 +10,7 @@ from starlette.authentication import (
     AuthenticationError,
     BaseUser,
 )
+from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.requests import HTTPConnection
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -29,6 +30,69 @@ class AuthenticatedNorthUser(BaseUser):
     ):
         self.connector_access_tokens = connector_access_tokens
         self.email = email
+
+
+class NorthAuthenticationMiddleware(AuthenticationMiddleware):
+    """
+    North's authentication middleware for MCP servers that applies authentication 
+    only to MCP protocol endpoints (/mcp, /sse). Custom routes bypass authentication
+    and are intended for operational purposes like Kubernetes health checks.
+    
+    MCP servers typically only need two authenticated endpoints:
+    - /mcp: JSON-RPC protocol endpoint for MCP communication
+    - /sse: Server-sent events endpoint for streaming transport
+    
+    Custom routes are automatically public and designed for:
+    - Kubernetes liveness/readiness probes (/health, /ready)
+    - Monitoring and metrics endpoints (/metrics, /status)
+    - Other operational/orchestration needs
+    
+    No configuration needed - this behavior follows MCP best practices.
+    """
+
+    def __init__(
+        self, 
+        app: ASGIApp, 
+        backend: AuthenticationBackend,
+        on_error,
+        protected_paths: list[str] | None = None,
+        debug: bool = False
+    ):
+        super().__init__(app, backend, on_error)
+        # Default protected paths - only MCP protocol routes require auth
+        self.protected_paths = protected_paths or ["/mcp", "/sse"]
+        self.debug = debug
+        self.logger = logging.getLogger("NorthMCP.Auth")
+        if debug:
+            self.logger.setLevel(logging.DEBUG)
+
+    def _should_authenticate(self, path: str) -> bool:
+        """
+        Check if the given path requires authentication.
+        Only MCP protocol paths (/mcp, /sse) require auth by default.
+        """
+        return path in self.protected_paths
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send):
+        if scope["type"] == "lifespan":
+            return await self.app(scope, receive, send)
+
+        path = scope.get("path", "")
+        
+        if not self._should_authenticate(path):
+            self.logger.debug(
+                "Path %s is a custom route (likely operational endpoint like health check), "
+                "bypassing authentication as intended for k8s/orchestration use", 
+                path
+            )
+            # For non-protected paths, create a minimal unauthenticated user
+            scope["user"] = None
+            scope["auth"] = AuthCredentials()
+            return await self.app(scope, receive, send)
+
+        self.logger.debug("Path %s is an MCP protocol endpoint, applying authentication", path)
+        
+        return await super().__call__(scope, receive, send)
 
 
 auth_context_var = contextvars.ContextVar[AuthenticatedNorthUser | None](
@@ -70,6 +134,17 @@ class AuthContextMiddleware:
             return await self.app(scope, receive, send)
 
         user = scope.get("user")
+        
+        # For custom routes that don't require auth, user will be None
+        if user is None:
+            self.logger.debug("Custom route accessed without authentication (operational endpoint)")
+            token = auth_context_var.set(None)
+            try:
+                await self.app(scope, receive, send)
+            finally:
+                auth_context_var.reset(token)
+            return
+        
         if not isinstance(user, AuthenticatedNorthUser):
             self.logger.debug("Authentication failed: user not found in context. User type: %s", type(user))
             raise AuthenticationError("user not found in context")
@@ -91,7 +166,7 @@ class NorthAuthBackend(AuthenticationBackend):
     def __init__(self, server_secret: str | None = None, debug: bool = False):
         self._server_secret = server_secret
         self.debug = debug
-        self.logger = logging.getLogger("NorthMCP.Auth")
+        self.logger = logging.getLogger("NorthMCP.AuthBackend")
         if debug:
             self.logger.setLevel(logging.DEBUG)
 
@@ -143,6 +218,10 @@ class NorthAuthBackend(AuthenticationBackend):
                 email = user_id_token.get("email")
                 
                 self.logger.debug("Successfully decoded user ID token. Email: %s", email)
+                
+                if not email:
+                    self.logger.debug("Authentication failed: no email found in user ID token")
+                    raise AuthenticationError("email required in user id token")
 
                 return AuthCredentials(), AuthenticatedNorthUser(
                     connector_access_tokens=tokens.connector_access_tokens, email=email

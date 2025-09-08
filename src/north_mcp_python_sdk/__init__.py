@@ -6,9 +6,8 @@ from mcp.server.auth.provider import OAuthAuthorizationServerProvider
 from mcp.server.fastmcp import FastMCP
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
-from starlette.middleware.authentication import AuthenticationMiddleware
 
-from .auth import AuthContextMiddleware, NorthAuthBackend, on_auth_error
+from .auth import AuthContextMiddleware, NorthAuthBackend, NorthAuthenticationMiddleware, on_auth_error
 
 
 def is_debug_mode() -> bool:
@@ -57,14 +56,22 @@ class NorthMCPServer(FastMCP):
         app = super().streamable_http_app()
         self._add_middleware(app)
         return app
-
+        
     def _add_middleware(self, app: Starlette) -> None:
         middleware = [
             Middleware(
-                AuthenticationMiddleware,
+                NorthAuthenticationMiddleware,
                 backend=NorthAuthBackend(self._server_secret, debug=self._debug),
                 on_error=on_auth_error,
+                debug=self._debug,
             ),
             Middleware(AuthContextMiddleware, debug=self._debug),
         ]
         app.user_middleware.extend(middleware)
+
+
+# Convenience exports
+__all__ = [
+    "NorthMCPServer", 
+    "is_debug_mode",
+]
