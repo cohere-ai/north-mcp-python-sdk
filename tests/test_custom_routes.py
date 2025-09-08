@@ -164,6 +164,42 @@ async def test_sse_routes_require_auth(sse_test_client):
 
 
 @pytest.mark.asyncio
+async def test_messages_routes_require_auth(sse_test_client):
+    """Test that /messages/* routes require authentication."""
+    response = await sse_test_client.post("/messages/test-session-id", json={
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "test",
+        "params": {}
+    })
+    assert response.status_code == 401
+    
+    headers = {"Authorization": "Bearer invalid"}
+    response = await sse_test_client.post("/messages/test-session-id", json={
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "test", 
+        "params": {}
+    }, headers=headers)
+    assert response.status_code == 401
+    
+    test_paths = [
+        "/messages/",
+        "/messages/abc-123",
+        "/messages/session-uuid-here"
+    ]
+    
+    for path in test_paths:
+        response = await sse_test_client.post(path, json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "test",
+            "params": {}
+        })
+        assert response.status_code == 401, f"Path {path} should require auth but returned {response.status_code}"
+
+
+@pytest.mark.asyncio
 async def test_custom_routes_with_optional_auth(test_client):
     """Test that custom routes can optionally use auth info."""
     # Test auth-info endpoint with auth
