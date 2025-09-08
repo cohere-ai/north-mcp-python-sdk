@@ -49,20 +49,15 @@ class NorthMCPServer(FastMCP):
 
     def sse_app(self, mount_path: str | None = None) -> Starlette:
         app = super().sse_app(mount_path=mount_path)
-        middleware = [
-            Middleware(
-                NorthAuthenticationMiddleware,
-                backend=NorthAuthBackend(self._server_secret, debug=self._debug),
-                on_error=on_auth_error,
-                debug=self._debug,
-            ),
-            Middleware(AuthContextMiddleware, debug=self._debug),
-        ]
-        app.user_middleware.extend(middleware)
+        self._add_middleware(app)
         return app
 
     def streamable_http_app(self) -> Starlette:
         app = super().streamable_http_app()
+        self._add_middleware(app)
+        return app
+        
+    def _add_middleware(self, app: Starlette) -> None:
         middleware = [
             Middleware(
                 NorthAuthenticationMiddleware,
@@ -73,7 +68,6 @@ class NorthMCPServer(FastMCP):
             Middleware(AuthContextMiddleware, debug=self._debug),
         ]
         app.user_middleware.extend(middleware)
-        return app
 
 
 # Convenience exports
