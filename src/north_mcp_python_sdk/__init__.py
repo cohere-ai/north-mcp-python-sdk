@@ -21,7 +21,7 @@ class NorthMCPServer(FastMCP):
         name: str | None = None,
         instructions: str | None = None,
         server_secret: str | None = None,
-        trusted_issuer_urls: list[str] | None = None,
+        trusted_issuers: list[str] | None = None,
         auth_server_provider: OAuthAuthorizationServerProvider[Any, Any, Any]
         | None = None,
         debug: bool | None = None,
@@ -29,7 +29,7 @@ class NorthMCPServer(FastMCP):
     ):
         super().__init__(name, instructions, auth_server_provider, **settings)
         self._server_secret = server_secret
-        self._trusted_issuer_urls = trusted_issuer_urls
+        self._trusted_issuers = trusted_issuers
 
         # Auto-enable debug mode from environment variable if not explicitly set
         if debug is None:
@@ -63,7 +63,11 @@ class NorthMCPServer(FastMCP):
         middleware = [
             Middleware(
                 NorthAuthenticationMiddleware,
-                backend=NorthAuthBackend(self._server_secret, debug=self._debug),
+                backend=NorthAuthBackend(
+                    self._server_secret,
+                    debug=self._debug,
+                    trusted_issuers=self._trusted_issuers
+                ),
                 on_error=on_auth_error,
                 debug=self._debug,
             ),

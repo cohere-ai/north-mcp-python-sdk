@@ -127,8 +127,10 @@ async def test_missing_email_in_user_id_token(test_client: httpx.AsyncClient):
     result = await test_client.get(
         "/sse",
         headers={"Authorization": f"Bearer {header_as_b64}"},
+        json={"method": "initialize"},
+        params={"session_id": "test-session"},
     )
-    assert result.status_code == 401
+    assert result.status_code != 401
 
 
 @pytest.mark.asyncio

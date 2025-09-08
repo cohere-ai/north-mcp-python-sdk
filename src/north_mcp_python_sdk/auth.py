@@ -176,11 +176,11 @@ class NorthAuthBackend(AuthenticationBackend):
     def __init__(
         self,
         server_secret: str | None = None,
-        trusted_issuer_urls: list[str] | None = None,
+        trusted_issuers: list[str] | None = None,
         debug: bool = False,
     ):
         self._server_secret = server_secret
-        self._trusted_issuer_urls = trusted_issuer_urls
+        self._trusted_issuers = trusted_issuers
         self.debug = debug
         self.logger = logging.getLogger("NorthMCP.AuthBackend")
         if debug:
@@ -242,7 +242,7 @@ class NorthAuthBackend(AuthenticationBackend):
                 options={"verify_signature": False},
             )
 
-            if self._trusted_issuer_urls:
+            if self._trusted_issuers:
                 self._verify_token_signature(
                     raw_token=tokens.user_id_token,
                     decoded_token=decoded_token,
@@ -261,10 +261,10 @@ class NorthAuthBackend(AuthenticationBackend):
         self.logger.debug("Verifying user ID token signature against trusted issuers")
         issuer = decoded_token.get("iss")
         if not issuer:
-            raise Exception("user id token issuer not found in token")
+            raise AuthenticationError("Token missing issuer")
 
-        if issuer not in self._trusted_issuer_urls:
-            raise Exception("user id token issuer not trusted: %s" % issuer)
+        if issuer not in self._trusted_issuers:
+            raise AuthenticationError(f"Untrusted issuer: {issuer}")
 
         openid_config_req = urllib.request.Request(
             url=issuer.rstrip("/") + "/.well-known/openid-configuration"
@@ -278,13 +278,13 @@ class NorthAuthBackend(AuthenticationBackend):
             "alg", "RS256"
         )
         if not kid:
-            raise Exception("user id token header 'kid' not found")
+            raise AuthenticationError("Token missing key identifier")
 
         # This will raise an exception if the signature is invalid
         jwt.decode(
             jwt=raw_token,
             key=jwks_client.get_signing_key(kid).key,
             algorithms=[algorithm],
-            issuer=self._trusted_issuer_urls,
+            issuer=self._trusted_issuers,
             options={"verify_signature": True, "verify_aud": False},
         )
