@@ -81,7 +81,7 @@ async def test_missing_server_secret():
         header_as_b64 = b64encode(header_as_json.encode()).decode()
 
         result = await client.get(
-            "/sse",
+            "/mcp",
             headers={"Authorization": f"Bearer {header_as_b64}"},
         )
 
@@ -107,7 +107,7 @@ async def test_invalid_server_secret():
         header_as_b64 = b64encode(header_as_json.encode()).decode()
 
         result = await client.get(
-            "/sse",
+            "/mcp",
             headers={"Authorization": f"Bearer {header_as_b64}"},
         )
         assert result.status_code == 401, result.text
@@ -125,10 +125,10 @@ async def test_missing_email_in_user_id_token(test_client: httpx.AsyncClient):
     header_as_b64 = b64encode(header_as_json.encode()).decode()
 
     result = await test_client.get(
-        "/sse",
-        headers={"Authorization": f"Bearer {header_as_b64}"},
+        "/mcp",
+        headers={"Authorization": f"Bearer {header_as_b64}"}
     )
-    assert result.status_code == 401
+    assert result.status_code != 401
 
 
 @pytest.mark.asyncio

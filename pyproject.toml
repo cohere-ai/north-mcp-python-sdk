@@ -1,11 +1,11 @@
 [project]
 name = "north-mcp-python-sdk"
-version = "0.1.2"
+version = "0.2.0"
 description = "Add your description here"
 readme = "README.md"
 authors = [{ name = "Raphael Cristal", email = "raphael@cohere.com" }]
 requires-python = ">=3.11"
-dependencies = ["mcp==1.11.0", "pyjwt>=2.10.1"]
+dependencies = ["mcp==1.11.0", "pyjwt[crypto]>=2.10.1"]
 
 [build-system]
 requires = ["hatchling"]
