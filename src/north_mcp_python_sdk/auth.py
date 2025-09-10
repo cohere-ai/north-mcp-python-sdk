@@ -269,8 +269,12 @@ class NorthAuthBackend(AuthenticationBackend):
         openid_config_req = urllib.request.Request(
             url=issuer.rstrip("/") + "/.well-known/openid-configuration"
         )
-        with urllib.request.urlopen(openid_config_req) as response:
-            openid_config = json.load(response)
+        try:
+            with urllib.request.urlopen(openid_config_req, timeout=10) as response:
+                openid_config = json.load(response)
+        except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError) as e:
+            self.logger.error(f"Failed to fetch OpenID configuration from {issuer}: {e}")
+            raise AuthenticationError(f"Failed to verify token: unable to fetch issuer configuration")
 
         unverified_header = jwt.get_unverified_header(jwt=raw_token)
         jwks_client = PyJWKClient(openid_config["jwks_uri"], cache_keys=True)
@@ -285,6 +289,6 @@ class NorthAuthBackend(AuthenticationBackend):
             jwt=raw_token,
             key=jwks_client.get_signing_key(kid).key,
             algorithms=[algorithm],
-            issuer=self._trusted_issuers,
+            issuer=issuer,
             options={"verify_signature": True, "verify_aud": False},
         )
