@@ -27,9 +27,7 @@ class AuthHeaderTokens(BaseModel):
 
 class AuthenticatedNorthUser(BaseUser):
     def __init__(
-        self,
-        connector_access_tokens: dict[str, str],
-        email: str | None = None,
+        self, connector_access_tokens: dict[str, str], email: str | None = None
     ):
         self.connector_access_tokens = connector_access_tokens
         self.email = email
@@ -37,30 +35,30 @@ class AuthenticatedNorthUser(BaseUser):
 
 class NorthAuthenticationMiddleware(AuthenticationMiddleware):
     """
-    North's authentication middleware for MCP servers that applies authentication 
+    North's authentication middleware for MCP servers that applies authentication
     only to MCP protocol endpoints (/mcp, /sse, /messages/*). Custom routes bypass authentication
     and are intended for operational purposes like Kubernetes health checks.
-    
+
     MCP servers typically need these authenticated endpoints:
     - /mcp: JSON-RPC protocol endpoint for MCP communication
     - /sse: Server-sent events endpoint for streaming transport
     - /messages/*: SSE message posting endpoints for client-to-server communication
-    
+
     Custom routes are automatically public and designed for:
     - Kubernetes liveness/readiness probes (/health, /ready)
     - Monitoring and metrics endpoints (/metrics, /status)
     - Other operational/orchestration needs
-    
+
     No configuration needed - this behavior follows MCP best practices.
     """
 
     def __init__(
-        self, 
-        app: ASGIApp, 
+        self,
+        app: ASGIApp,
         backend: AuthenticationBackend,
         on_error,
         protected_paths: list[str] | None = None,
-        debug: bool = False
+        debug: bool = False,
     ):
         super().__init__(app, backend, on_error)
         # Default protected paths - only MCP protocol routes require auth
@@ -78,11 +76,11 @@ class NorthAuthenticationMiddleware(AuthenticationMiddleware):
 
         if path in self.protected_paths:
             return True
-        
+
         # for SSE servers
         if path.startswith("/messages/"):
             return True
-            
+
         return False
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send):
@@ -90,20 +88,23 @@ class NorthAuthenticationMiddleware(AuthenticationMiddleware):
             return await self.app(scope, receive, send)
 
         path = scope.get("path", "")
-        
+
         if not self._should_authenticate(path):
             self.logger.debug(
                 "Path %s is a custom route (likely operational endpoint like health check), "
-                "bypassing authentication as intended for k8s/orchestration use", 
-                path
+                "bypassing authentication as intended for k8s/orchestration use",
+                path,
             )
             # For non-protected paths, create a minimal unauthenticated user
             scope["user"] = None
             scope["auth"] = AuthCredentials()
             return await self.app(scope, receive, send)
 
-        self.logger.debug("Path %s is an MCP protocol endpoint, applying authentication", path)
-        
+        self.logger.debug(
+            "Path %s is an MCP protocol endpoint, applying authentication",
+            path,
+        )
+
         return await super().__call__(scope, receive, send)
 
 
@@ -112,7 +113,9 @@ auth_context_var = contextvars.ContextVar[AuthenticatedNorthUser | None](
 )
 
 
-def on_auth_error(request: HTTPConnection, exc: AuthenticationError) -> JSONResponse:
+def on_auth_error(
+    request: HTTPConnection, exc: AuthenticationError
+) -> JSONResponse:
     return JSONResponse({"error": str(exc)}, status_code=401)
 
 
@@ -146,17 +149,19 @@ class AuthContextMiddleware:
             return await self.app(scope, receive, send)
 
         user = scope.get("user")
-        
+
         # For custom routes that don't require auth, user will be None
         if user is None:
-            self.logger.debug("Custom route accessed without authentication (operational endpoint)")
+            self.logger.debug(
+                "Custom route accessed without authentication (operational endpoint)"
+            )
             token = auth_context_var.set(None)
             try:
                 await self.app(scope, receive, send)
             finally:
                 auth_context_var.reset(token)
             return
-        
+
         if not isinstance(user, AuthenticatedNorthUser):
             self.logger.debug(
                 "Authentication failed: user not found in context. User type: %s",
@@ -209,7 +214,9 @@ class NorthAuthBackend(AuthenticationBackend):
             self.logger.debug("No Authorization header present")
             raise AuthenticationError("invalid authorization header")
 
-        self.logger.debug("Authorization header present (length: %d)", len(auth_header))
+        self.logger.debug(
+            "Authorization header present (length: %d)", len(auth_header)
+        )
 
         auth_header = auth_header.replace("Bearer ", "", 1)
 
@@ -229,7 +236,8 @@ class NorthAuthBackend(AuthenticationBackend):
                 len(tokens.connector_access_tokens),
             )
             self.logger.debug(
-                "Available connectors: %s", list(tokens.connector_access_tokens.keys())
+                "Available connectors: %s",
+                list(tokens.connector_access_tokens.keys()),
             )
         except ValidationError as e:
             self.logger.debug("Failed to validate auth tokens: %s", e)
@@ -240,34 +248,44 @@ class NorthAuthBackend(AuthenticationBackend):
             raise AuthenticationError("access denied")
 
         if not tokens.user_id_token:
-            self.logger.debug("Authentication successful without user ID token")
+            self.logger.debug(
+                "Authentication successful without user ID token"
+            )
             return AuthCredentials(), AuthenticatedNorthUser(
-                connector_access_tokens=tokens.connector_access_tokens,
+                connector_access_tokens=tokens.connector_access_tokens
             )
 
         try:
             decoded_token = jwt.decode(
                 jwt=tokens.user_id_token,
-                options={"verify_signature": False},
+                options={
+                    "verify_signature": False,
+                },
             )
 
             if self._trusted_issuers:
                 self._verify_token_signature(
-                    raw_token=tokens.user_id_token,
-                    decoded_token=decoded_token,
+                    raw_token=tokens.user_id_token, decoded_token=decoded_token
                 )
 
             email = decoded_token.get("email")
-            self.logger.debug("Successfully decoded user ID token. Email: %s", email)
+            self.logger.debug(
+                "Successfully decoded user ID token. Email: %s", email
+            )
             return AuthCredentials(), AuthenticatedNorthUser(
-                connector_access_tokens=tokens.connector_access_tokens, email=email
+                connector_access_tokens=tokens.connector_access_tokens,
+                email=email,
             )
         except Exception as e:
             self.logger.debug("Failed to decode user ID token: %s", e)
             raise AuthenticationError("invalid user id token")
 
-    def _verify_token_signature(self, raw_token: str, decoded_token: dict) -> None:
-        self.logger.debug("Verifying user ID token signature against trusted issuers")
+    def _verify_token_signature(
+        self, raw_token: str, decoded_token: dict
+    ) -> None:
+        self.logger.debug(
+            "Verifying user ID token signature against trusted issuers"
+        )
         issuer = decoded_token.get("iss")
         if not issuer:
             raise AuthenticationError("Token missing issuer")
@@ -279,16 +297,27 @@ class NorthAuthBackend(AuthenticationBackend):
             url=issuer.rstrip("/") + "/.well-known/openid-configuration"
         )
         try:
-            with urllib.request.urlopen(openid_config_req, timeout=10) as response:
+            with urllib.request.urlopen(
+                openid_config_req, timeout=10
+            ) as response:
                 openid_config = json.load(response)
-        except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError) as e:
-            self.logger.error(f"Failed to fetch OpenID configuration from {issuer}: {e}")
-            raise AuthenticationError(f"Failed to verify token: unable to fetch issuer configuration")
+        except (
+            urllib.error.URLError,
+            urllib.error.HTTPError,
+            json.JSONDecodeError,
+        ) as e:
+            self.logger.error(
+                f"Failed to fetch OpenID configuration from {issuer}: {e}"
+            )
+            raise AuthenticationError(
+                f"Failed to verify token: unable to fetch issuer configuration"
+            )
 
         unverified_header = jwt.get_unverified_header(jwt=raw_token)
         jwks_client = PyJWKClient(openid_config["jwks_uri"], cache_keys=True)
-        kid, algorithm = unverified_header.get("kid"), unverified_header.get(
-            "alg", "RS256"
+        kid, algorithm = (
+            unverified_header.get("kid"),
+            unverified_header.get("alg", "RS256"),
         )
         if not kid:
             raise AuthenticationError("Token missing key identifier")

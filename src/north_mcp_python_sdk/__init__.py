@@ -7,12 +7,17 @@ from mcp.server.fastmcp import FastMCP
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 
-from .auth import AuthContextMiddleware, NorthAuthBackend, NorthAuthenticationMiddleware, on_auth_error
+from .auth import (
+    AuthContextMiddleware,
+    NorthAuthBackend,
+    NorthAuthenticationMiddleware,
+    on_auth_error,
+)
 
 
 def is_debug_mode() -> bool:
     """Check if debug mode should be enabled based on environment variable."""
-    return os.getenv('DEBUG', '').lower() in ('true', '1', 'yes', 'on')
+    return os.getenv("DEBUG", "").lower() in ("true", "1", "yes", "on")
 
 
 class NorthMCPServer(FastMCP):
@@ -41,7 +46,7 @@ class NorthMCPServer(FastMCP):
         if self._debug:
             logging.basicConfig(
                 level=logging.DEBUG,
-                format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+                format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
             )
             self._logger = logging.getLogger(f"NorthMCP.{name or 'Server'}")
             self._logger.debug("Debug mode enabled for North MCP Server")
@@ -58,7 +63,7 @@ class NorthMCPServer(FastMCP):
         app = super().streamable_http_app()
         self._add_middleware(app)
         return app
-        
+
     def _add_middleware(self, app: Starlette) -> None:
         middleware = [
             Middleware(
@@ -66,7 +71,7 @@ class NorthMCPServer(FastMCP):
                 backend=NorthAuthBackend(
                     self._server_secret,
                     debug=self._debug,
-                    trusted_issuers=self._trusted_issuers
+                    trusted_issuers=self._trusted_issuers,
                 ),
                 on_error=on_auth_error,
                 debug=self._debug,
@@ -77,7 +82,4 @@ class NorthMCPServer(FastMCP):
 
 
 # Convenience exports
-__all__ = [
-    "NorthMCPServer", 
-    "is_debug_mode",
-]
+__all__ = ["NorthMCPServer", "is_debug_mode"]

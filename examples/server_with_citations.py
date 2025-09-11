@@ -20,7 +20,7 @@ def canada_knowledge(query: str) -> list[dict]:
                 "title": "Canada - Wikipedia",
                 "url": "https://en.wikipedia.org/wiki/Canada",
             },
-        },
+        }
     ]
 
 

@@ -16,7 +16,7 @@ def add(a: int, b: int) -> int:
         print(f"Tool called by authenticated user: {user.email}")
     except Exception:
         print("Tool called by unauthenticated user (shouldn't happen)")
-    
+
     return a + b
 
 
@@ -31,14 +31,13 @@ async def readiness_check(request: Request) -> JSONResponse:
     """Kubernetes readiness probe - checks if server is ready to accept traffic"""
     # In a real implementation, you might check database connections,
     # external service availability, etc.
-    return JSONResponse({
-        "status": "ready",
-        "server": "MCP Server with K8s Endpoints",
-        "checks": {
-            "mcp_protocol": "ok",
-            "tools_loaded": "ok"
+    return JSONResponse(
+        {
+            "status": "ready",
+            "server": "MCP Server with K8s Endpoints",
+            "checks": {"mcp_protocol": "ok", "tools_loaded": "ok"},
         }
-    })
+    )
 
 
 @mcp.custom_route("/metrics", methods=["GET"])
@@ -63,20 +62,22 @@ async def status_check(request: Request) -> JSONResponse:
         user = get_authenticated_user()
     except Exception:
         user = None
-    
+
     # This endpoint works without auth but can show auth info if provided
     status_data = {
         "status": "running",
         "server": "MCP Server with K8s Endpoints",
         "version": "1.0.0",
         "uptime_seconds": 3600,  # In real implementation, track actual uptime
-        "authenticated_request": user is not None
+        "authenticated_request": user is not None,
     }
-    
+
     if user:
         status_data["user_email"] = user.email
-        status_data["available_connectors"] = list(user.connector_access_tokens.keys())
-    
+        status_data["available_connectors"] = list(
+            user.connector_access_tokens.keys()
+        )
+
     return JSONResponse(status_data)
 
 
@@ -91,5 +92,5 @@ if __name__ == "__main__":
     print("  POST /mcp    - JSON-RPC MCP communication")
     print("  GET /sse     - Server-sent events for streaming")
     print("\nPerfect for deployment in Kubernetes with proper health checks!")
-    
+
     mcp.run(transport="streamable-http")
