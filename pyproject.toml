@@ -19,6 +19,20 @@ dev = [
     "trio>=0.30.0",
 ]
 
+[tool.uv]
+constraint-dependencies = ["uv>=0.8.13"]
+
+[tool.ruff]
+line-length = 79
+target-version = "py311"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space" 
+line-ending = "auto"
+docstring-code-format = true
+docstring-code-line-length = "dynamic"
+
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
