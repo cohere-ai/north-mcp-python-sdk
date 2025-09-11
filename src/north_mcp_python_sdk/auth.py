@@ -246,10 +246,6 @@ class NorthAuthBackend(AuthenticationBackend):
             email = decoded_token.get("email")
             self.logger.debug("Successfully decoded user ID token. Email: %s", email)
             
-            if not email:
-                self.logger.debug("Authentication failed: no email found in user ID token")
-                raise AuthenticationError("email required in user id token")
-            
             return email
         except (jwt.DecodeError, jwt.InvalidTokenError, ValueError, KeyError) as e:
             self.logger.debug("Failed to decode user ID token: %s", e)
@@ -334,68 +330,12 @@ class NorthAuthBackend(AuthenticationBackend):
         headers_debug = {k: v for k, v in conn.headers.items()}
         self.logger.debug("Request headers: %s", headers_debug)
 
-        auth_header = conn.headers.get("Authorization")
+        # Check for X-North headers first (preferred)
+        if self._has_x_north_headers(conn):
+            return await self._authenticate_x_north_headers(conn)
 
-        if not auth_header:
-            self.logger.debug("No Authorization header present")
-            raise AuthenticationError("invalid authorization header")
-
-        self.logger.debug("Authorization header present (length: %d)", len(auth_header))
-
-        auth_header = auth_header.replace("Bearer ", "", 1)
-
-        try:
-            decoded_auth_header = base64.b64decode(auth_header).decode()
-            self.logger.debug("Successfully decoded base64 auth header")
-        except Exception as e:
-            self.logger.debug("Failed to decode base64 auth header: %s", e)
-            raise AuthenticationError("invalid authorization header")
-
-        try:
-            tokens = AuthHeaderTokens.model_validate_json(decoded_auth_header)
-            self.logger.debug(
-                "Successfully parsed auth tokens. Has server_secret: %s, Has user_id_token: %s, Connector count: %d",
-                tokens.server_secret is not None,
-                tokens.user_id_token is not None,
-                len(tokens.connector_access_tokens),
-            )
-            self.logger.debug(
-                "Available connectors: %s", list(tokens.connector_access_tokens.keys())
-            )
-        except ValidationError as e:
-            self.logger.debug("Failed to validate auth tokens: %s", e)
-            raise AuthenticationError("unable to decode bearer token")
-
-        if self._server_secret and self._server_secret != tokens.server_secret:
-            self.logger.debug("Server secret mismatch - access denied")
-            raise AuthenticationError("access denied")
-
-        if not tokens.user_id_token:
-            self.logger.debug("Authentication successful without user ID token")
-            return AuthCredentials(), AuthenticatedNorthUser(
-                connector_access_tokens=tokens.connector_access_tokens,
-            )
-
-        try:
-            decoded_token = jwt.decode(
-                jwt=tokens.user_id_token,
-                options={"verify_signature": False},
-            )
-
-            if self._trusted_issuers:
-                self._verify_token_signature(
-                    raw_token=tokens.user_id_token,
-                    decoded_token=decoded_token,
-                )
-
-            email = decoded_token.get("email")
-            self.logger.debug("Successfully decoded user ID token. Email: %s", email)
-            return AuthCredentials(), AuthenticatedNorthUser(
-                connector_access_tokens=tokens.connector_access_tokens, email=email
-            )
-        except Exception as e:
-            self.logger.debug("Failed to decode user ID token: %s", e)
-            raise AuthenticationError("invalid user id token")
+        # Fall back to legacy Authorization Bearer header
+        return await self._authenticate_legacy_bearer(conn)
 
     def _verify_token_signature(self, raw_token: str, decoded_token: dict) -> None:
         self.logger.debug("Verifying user ID token signature against trusted issuers")

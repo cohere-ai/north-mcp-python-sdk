@@ -67,14 +67,15 @@ async def test_x_north_headers_invalid_auth():
     with pytest.raises(AuthenticationError, match="invalid connector tokens format"):
         await backend.authenticate(conn)
     
-    # JWT missing email
+    # JWT missing email - should succeed but with no email (legacy behavior)
     invalid_jwt = jwt.encode(payload={"name": "test"}, key="test")
     headers = create_x_north_headers()
     headers["X-North-ID-Token"] = invalid_jwt
     conn = create_mock_connection(headers)
     
-    with pytest.raises(AuthenticationError, match="email required in user id token"):
-        await backend.authenticate(conn)
+    credentials, user = await backend.authenticate(conn)
+    assert isinstance(user, AuthenticatedNorthUser)
+    assert user.email is None  # email should be None when missing from token
 
 
 @pytest.mark.asyncio
