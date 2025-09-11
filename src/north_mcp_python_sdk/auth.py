@@ -251,10 +251,7 @@ class NorthAuthBackend(AuthenticationBackend):
                 raise AuthenticationError("email required in user id token")
             
             return email
-        except AuthenticationError:
-            # Re-raise specific authentication errors (like missing email)
-            raise
-        except Exception as e:
+        except (jwt.DecodeError, jwt.InvalidTokenError, ValueError, KeyError) as e:
             self.logger.debug("Failed to decode user ID token: %s", e)
             raise AuthenticationError("invalid user id token")
 
