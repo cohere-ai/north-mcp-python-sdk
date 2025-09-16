@@ -75,9 +75,11 @@ class NorthAuthenticationMiddleware(AuthenticationMiddleware):
         Check if the given path requires authentication.
         Only MCP protocol paths (/mcp, /sse, /messages/*) require auth by default.
         """
-
-        if path in self.protected_paths:
-            return True
+        normalized_path = path.rstrip('/')
+        for protected_path in self.protected_paths:
+            # Check both with and without trailing slash
+            if normalized_path == protected_path.rstrip('/'):
+                return True
         
         # for SSE servers
         if path.startswith("/messages/"):
