@@ -136,6 +136,14 @@ async def test_mcp_routes_require_auth(test_client):
     })
     assert response.status_code == 401
     
+    response = await test_client.post("/mcp/", json={
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {}
+    })
+    assert response.status_code == 401
+    
     # Test MCP endpoint with auth (should work)
     headers = {"Authorization": create_auth_header()}
     response = await test_client.post("/mcp", json={
