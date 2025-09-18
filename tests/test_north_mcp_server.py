@@ -18,7 +18,8 @@ def app() -> NorthMCPServer:
 @pytest_asyncio.fixture
 async def test_client(app: NorthMCPServer):
     async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app.sse_app()), base_url="https://mcptest.com"
+        transport=httpx.ASGITransport(app=app.sse_app()),
+        base_url="https://mcptest.com",
     ) as client:
         yield client
 
@@ -26,7 +27,8 @@ async def test_client(app: NorthMCPServer):
 @pytest_asyncio.fixture
 async def mcp_test_client(app: NorthMCPServer):
     async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app.streamable_http_app()), base_url="https://mcptest.com"
+        transport=httpx.ASGITransport(app=app.streamable_http_app()),
+        base_url="https://mcptest.com",
     ) as client:
         yield client
 
@@ -67,7 +69,8 @@ async def test_missing_server_secret():
     app = NorthMCPServer(server_secret="secret")
 
     async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app.sse_app()), base_url="https://mcptest.com"
+        transport=httpx.ASGITransport(app=app.sse_app()),
+        base_url="https://mcptest.com",
     ) as client:
         user_id_token = jwt.encode(
             payload={"email": "test@company.com"}, key="does-not-matter"
@@ -93,7 +96,8 @@ async def test_invalid_server_secret():
     app = NorthMCPServer(server_secret="secret")
 
     async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app.sse_app()), base_url="https://mcptest.com"
+        transport=httpx.ASGITransport(app=app.sse_app()),
+        base_url="https://mcptest.com",
     ) as client:
         user_id_token = jwt.encode(
             payload={"email": "test@company.com"}, key="does-not-matter"
@@ -125,14 +129,15 @@ async def test_missing_email_in_user_id_token(test_client: httpx.AsyncClient):
     header_as_b64 = b64encode(header_as_json.encode()).decode()
 
     result = await test_client.get(
-        "/mcp",
-        headers={"Authorization": f"Bearer {header_as_b64}"}
+        "/mcp", headers={"Authorization": f"Bearer {header_as_b64}"}
     )
     assert result.status_code != 401
 
 
 @pytest.mark.asyncio
-async def test_valid_auth_header(app: NorthMCPServer, mcp_test_client: httpx.AsyncClient):
+async def test_valid_auth_header(
+    app: NorthMCPServer, mcp_test_client: httpx.AsyncClient
+):
     user_id_token = jwt.encode(
         payload={"email": "test@company.com"}, key="does-not-matter"
     )
@@ -147,7 +152,7 @@ async def test_valid_auth_header(app: NorthMCPServer, mcp_test_client: httpx.Asy
     result = await mcp_test_client.post(
         "/mcp",
         headers={"Authorization": f"Bearer {header_as_b64}"},
-        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
     )
 
     assert result.status_code != 401
@@ -171,7 +176,7 @@ async def test_valid_auth_header_no_bearer(
     result = await mcp_test_client.post(
         "/mcp",
         headers={"Authorization": f"Bearer {header_as_b64}"},
-        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
     )
 
     assert result.status_code != 401
