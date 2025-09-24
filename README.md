@@ -143,3 +143,50 @@ Follow the same process as before. When you call the tool, you should see the fo
 ```
 This tool was called by: test@company.com
 ```
+
+## Development
+
+### Prerequisites
+
+To contribute to this project, you'll need:
+
+- **Python 3.11+**: Required for the SDK
+- **uv >= 0.8.13**: Used for dependency management, formatting, and CI checks
+
+### Setup
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/cohere-ai/north-mcp-python-sdk.git
+   cd north-mcp-python-sdk
+   ```
+
+2. Install dependencies:
+   ```bash
+   uv sync --dev
+   ```
+
+### Code Formatting
+
+This project uses `uv format` for consistent code formatting. The CI pipeline enforces these standards:
+
+```bash
+# Check formatting (same as CI)
+uv format --preview-features format --check
+
+# Apply formatting
+uv format --preview-features format
+```
+
+### Running Tests
+
+```bash
+uv run pytest
+```
+
+### Contributing
+
+Before submitting a PR:
+1. Ensure your code passes formatting checks: `uv format --preview-features format --check`
+2. Run the test suite: `uv run pytest`
+3. Follow the existing code style and patterns
