@@ -38,13 +38,17 @@ class AuthenticatedNorthUser(BaseUser):
 class NorthAuthenticationMiddleware(AuthenticationMiddleware):
     """
     North's authentication middleware for MCP servers that applies authentication
-    only to MCP protocol endpoints (/mcp, /sse, /messages/*). Custom routes bypass authentication
-    and are intended for operational purposes like Kubernetes health checks.
+    only to MCP protocol endpoints (/mcp, /sse, /messages/*). Custom routes and
+    OPTIONS requests (CORS preflights) bypass authentication.
 
     MCP servers typically need these authenticated endpoints:
     - /mcp: JSON-RPC protocol endpoint for MCP communication
     - /sse: Server-sent events endpoint for streaming transport
     - /messages/*: SSE message posting endpoints for client-to-server communication
+
+    Requests that bypass authentication:
+    - OPTIONS requests (CORS preflights) - exempt regardless of path
+    - Custom routes (non-MCP paths) - for operational endpoints
 
     Custom routes are automatically public and designed for:
     - Kubernetes liveness/readiness probes (/health, /ready)
@@ -70,11 +74,16 @@ class NorthAuthenticationMiddleware(AuthenticationMiddleware):
         if debug:
             self.logger.setLevel(logging.DEBUG)
 
-    def _should_authenticate(self, path: str) -> bool:
+    def _should_authenticate(self, path: str, method: str = "GET") -> bool:
         """
-        Check if the given path requires authentication.
+        Check if the given path and method requires authentication.
         Only MCP protocol paths (/mcp, /sse, /messages/*) require auth by default.
+        OPTIONS requests (CORS preflights) are always exempt from authentication.
         """
+        # OPTIONS requests (CORS preflights) should never require authentication
+        if method == "OPTIONS":
+            return False
+            
         normalized_path = path.rstrip("/")
         for protected_path in self.protected_paths:
             # Check both with and without trailing slash
@@ -92,13 +101,20 @@ class NorthAuthenticationMiddleware(AuthenticationMiddleware):
             return await self.app(scope, receive, send)
 
         path = scope.get("path", "")
+        method = scope.get("method", "GET")
 
-        if not self._should_authenticate(path):
-            self.logger.debug(
-                "Path %s is a custom route (likely operational endpoint like health check), "
-                "bypassing authentication as intended for k8s/orchestration use",
-                path,
-            )
+        if not self._should_authenticate(path, method):
+            if method == "OPTIONS":
+                self.logger.debug(
+                    "OPTIONS request to %s bypassing authentication (CORS preflight)",
+                    path,
+                )
+            else:
+                self.logger.debug(
+                    "Path %s is a custom route (likely operational endpoint like health check), "
+                    "bypassing authentication as intended for k8s/orchestration use",
+                    path,
+                )
             # For non-protected paths, create a minimal unauthenticated user
             scope["user"] = None
             scope["auth"] = AuthCredentials()
