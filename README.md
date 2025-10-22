@@ -106,7 +106,12 @@ Debug mode logs sensitive information including request headers and token metada
 
 ## Local Development without North
 
-This guide describes how to test your MCP server locally without connecting it to North. For this, we will use the MCP Inspector.
+This guide describes how to test your MCP server locally without connecting it to North. For this, we will use the MCP Inspector. You can run it with:
+
+
+```sh
+npx @modelcontextprotocol/inspector
+```
 
 If authentication is not required and you just want to run it locally, you can choose the stdio transport. Navigate to the [MCP Inspector](http://127.0.0.1:6274) and configure it as follows:
 * Transport Type: stdio
