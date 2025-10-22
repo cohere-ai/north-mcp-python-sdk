@@ -106,10 +106,7 @@ Debug mode logs sensitive information including request headers and token metada
 
 ## Local Development without North
 
-This guide describes how to test your MCP server locally without connecting it to North. For this, we will use the MCP Inspector. You can run it with:
-```
-npx @modelcontextprotocol/inspector
-```
+This guide describes how to test your MCP server locally without connecting it to North. For this, we will use the MCP Inspector.
 
 If authentication is not required and you just want to run it locally, you can choose the stdio transport. Navigate to the [MCP Inspector](http://127.0.0.1:6274) and configure it as follows:
 * Transport Type: stdio
@@ -124,19 +121,40 @@ From here:
 
 
 ### Adding authentication
-
 If you want to test the authentication mechanism locally you can do the following. First start the server with the streamable http transport:
 
 ```
 uv run examples/server_with_auth.py --transport streamable-http
 ```
 
-Next, create a bearer token. You can generate one using `examples/create_bearer_token.py` or use a pre-made one.
+Next, start MCP inspector in your terminal, and copy the Session Token it outputs to your clipboard.
 
-Navigate to the MCP Inspector and configure it like this:
-* Transport Type: Streamable HTTP
-* URL: http://localhost:5222/mcp
-* Authentication -> Bearer token: eyJzZXJ2ZXJfc2VjcmV0IjogInNlcnZlcl9zZWNyZXQiLCAidXNlcl9pZF90b2tlbiI6ICJleUpoYkdjaU9pSklVekkxTmlJc0luUjVjQ0k2SWtwWFZDSjkuZXlKbGJXRnBiQ0k2SW5SbGMzUkFZMjl0Y0dGdWVTNWpiMjBpZlEuV0pjckVUUi1MZnFtX2xrdE9vdjd0Q1ktTmZYR2JuYTVUMjhaeFhTaEZ4SSIsICJjb25uZWN0b3JfYWNjZXNzX3Rva2VucyI6IHsiZ29vZ2xlIjogImFiYyJ9fQ==
+It will then automatically open the browser - paste the session token into `Configuration > Proxy Session Token` field.
+
+```sh
+npx @modelcontextprotocol/inspector
+```
+
+Configure the rest of your MCP inspector with the following settings:
+
+| Field  |  Value |
+|---|---|
+|Transport Type|Streamable HTTP|
+|URL|http://localhost:5222/mcp (or wherever your local MCP server is running)|
+|Connection Type|Via Proxy (very important)|
+|Authentication > Custom Headers|See Below|
+|Proxy Session Token|The token you copied from the previous step|
+
+For Custom Headers, include the following:
+
+| Key  |  Value |
+|---|---|
+|Authorization|`Bearer eyJzZXJ2ZXJfc2VjcmV0IjogIiIsICJ1c2VyX2lkX3Rva2VuIjogImV5SmhiR2NpT2lKSVV6STFOaUlzSW5SNWNDSTZJa3BYVkNKOS5leUpsYldGcGJDSTZJblJsYzNSQVkyOXRjR0Z1ZVM1amIyMGlmUS5XSmNyRVRSLUxmcW1fbGt0T292N3RDWS1OZlhHYm5hNVQyOFp4WFNoRnhJIiwgImNvbm5lY3Rvcl9hY2Nlc3NfdG9rZW5zIjogeyJnb29nbGUiOiAiYWJjIn19`|
+
+You can use this token, or generate your own using [examples/create_bearer_token.py](examples/create_bearer_token.py).
+
+
+Next, create a bearer token. You can generate one using `examples/create_bearer_token.py` or use a pre-made one.
 
 Follow the same process as before. When you call the tool, you should see the following log in the terminal where you started the server:
 
