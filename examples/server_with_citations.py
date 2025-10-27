@@ -4,7 +4,8 @@ Example shows how to return results that are interpreted as citations in the Nor
 """
 
 from north_mcp_python_sdk import NorthMCPServer
-from north_mcp_python_sdk.auth import get_authenticated_user
+
+from datetime import datetime
 
 mcp = NorthMCPServer("Demo", port=5222)
 
@@ -19,6 +20,9 @@ def canada_knowledge(query: str) -> list[dict]:
             "_north_metadata": {
                 "title": "Canada - Wikipedia",
                 "url": "https://en.wikipedia.org/wiki/Canada",
+                "author_name": "Dave Smith",
+                "last_updated": datetime(2020, 1, 2).timestamp(),
+                "page_number": 1,
             },
         },
     ]
