@@ -13,6 +13,12 @@ from .auth import (
     NorthAuthenticationMiddleware,
     on_auth_error,
 )
+from .middleware import (
+    FastMCPNorthMiddleware,
+    NorthRequestContext,
+    get_north_request_context,
+    north_request_context_var,
+)
 
 
 def is_debug_mode() -> bool:
@@ -85,4 +91,8 @@ class NorthMCPServer(FastMCP):
 __all__ = [
     "NorthMCPServer",
     "is_debug_mode",
+    "FastMCPNorthMiddleware",
+    "NorthRequestContext",
+    "get_north_request_context",
+    "north_request_context_var",
 ]
