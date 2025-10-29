@@ -21,8 +21,8 @@ def canada_knowledge(query: str) -> list[dict]:
                 "title": "Canada - Wikipedia",
                 "url": "https://en.wikipedia.org/wiki/Canada",
                 "author_name": "Dave Smith",
-                "last_updated": datetime(2020, 1, 2).timestamp(),
-                "page_number": 1,
+                "last_updated": str(datetime(2020, 1, 2).timestamp()),
+                "page_number": str(1),
             },
         },
     ]
