@@ -18,6 +18,17 @@ from starlette.requests import HTTPConnection
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from .north_context import (
+    DEFAULT_CONNECTOR_TOKENS_HEADER,
+    DEFAULT_SERVER_SECRET_HEADER,
+    DEFAULT_USER_ID_TOKEN_HEADER,
+    NORTH_CONTEXT_SCOPE_KEY,
+    NorthRequestContext,
+    decode_connector_tokens,
+    reset_north_request_context,
+    set_north_request_context,
+)
+
 
 class AuthHeaderTokens(BaseModel):
     server_secret: str | None
@@ -30,9 +41,15 @@ class AuthenticatedNorthUser(BaseUser):
         self,
         connector_access_tokens: dict[str, str],
         email: str | None = None,
+        user_id_token: str | None = None,
     ):
         self.connector_access_tokens = connector_access_tokens
         self.email = email
+        self.user_id_token = user_id_token
+        self.north_context = NorthRequestContext(
+            user_id_token=user_id_token,
+            connector_tokens=connector_access_tokens,
+        )
 
 
 class NorthAuthenticationMiddleware(AuthenticationMiddleware):
@@ -153,16 +170,32 @@ class AuthContextMiddleware:
             return await self.app(scope, receive, send)
 
         user = scope.get("user")
+        existing_context = scope.get(NORTH_CONTEXT_SCOPE_KEY)
+
+        def store_context(context: NorthRequestContext) -> None:
+            scope[NORTH_CONTEXT_SCOPE_KEY] = context
+            state = scope.get("state")
+            if state is None:
+                scope["state"] = {"north_context": context}
+            elif isinstance(state, dict):
+                state["north_context"] = context
+            else:
+                setattr(state, "north_context", context)
 
         # For custom routes that don't require auth, user will be None
         if user is None:
             self.logger.debug(
                 "Custom route accessed without authentication (operational endpoint)"
             )
+            context = existing_context or NorthRequestContext()
+            store_context(context)
+
+            context_token = set_north_request_context(context)
             token = auth_context_var.set(None)
             try:
                 await self.app(scope, receive, send)
             finally:
+                reset_north_request_context(context_token)
                 auth_context_var.reset(token)
             return
 
@@ -179,10 +212,15 @@ class AuthContextMiddleware:
             list(user.connector_access_tokens.keys()),
         )
 
+        context = existing_context or user.north_context
+        store_context(context)
+
+        context_token = set_north_request_context(context)
         token = auth_context_var.set(user)
         try:
             await self.app(scope, receive, send)
         finally:
+            reset_north_request_context(context_token)
             auth_context_var.reset(token)
 
 
@@ -211,25 +249,11 @@ class NorthAuthBackend(AuthenticationBackend):
         return any(
             conn.headers.get(header)
             for header in [
-                "X-North-ID-Token",
-                "X-North-Connector-Tokens",
-                "X-North-Server-Secret",
+                DEFAULT_USER_ID_TOKEN_HEADER,
+                DEFAULT_CONNECTOR_TOKENS_HEADER,
+                DEFAULT_SERVER_SECRET_HEADER,
             ]
         )
-
-    def _parse_connector_tokens(self, header_value: str) -> dict[str, str]:
-        """Parse Base64 URL-safe encoded JSON connector tokens."""
-        try:
-            # Add padding if needed for Base64 decoding
-            padded = header_value + "=" * (4 - len(header_value) % 4)
-            decoded_json = base64.urlsafe_b64decode(padded).decode()
-            tokens = json.loads(decoded_json)
-            if not isinstance(tokens, dict):
-                raise ValueError("Connector tokens must be a JSON object")
-            return tokens
-        except Exception as e:
-            self.logger.debug("Failed to parse connector tokens: %s", e)
-            raise AuthenticationError("invalid connector tokens format")
 
     def _validate_server_secret(self, provided_secret: str | None) -> None:
         """Validate server secret matches expected value."""
@@ -271,11 +295,16 @@ class NorthAuthBackend(AuthenticationBackend):
             raise AuthenticationError("invalid user id token")
 
     def _create_authenticated_user(
-        self, email: str | None, connector_access_tokens: dict[str, str]
+        self,
+        email: str | None,
+        connector_access_tokens: dict[str, str],
+        user_id_token: str | None,
     ) -> tuple[AuthCredentials, AuthenticatedNorthUser]:
         """Create authenticated user from validated tokens."""
         return AuthCredentials(), AuthenticatedNorthUser(
-            connector_access_tokens=connector_access_tokens, email=email
+            connector_access_tokens=connector_access_tokens,
+            email=email,
+            user_id_token=user_id_token,
         )
 
     async def _authenticate_x_north_headers(
@@ -285,16 +314,25 @@ class NorthAuthBackend(AuthenticationBackend):
         self.logger.debug("Using X-North headers for authentication")
 
         # Extract headers
-        user_id_token = conn.headers.get("X-North-ID-Token")
-        connector_tokens_header = conn.headers.get("X-North-Connector-Tokens")
-        server_secret = conn.headers.get("X-North-Server-Secret")
+        user_id_token = conn.headers.get(DEFAULT_USER_ID_TOKEN_HEADER)
+        connector_tokens_header = conn.headers.get(
+            DEFAULT_CONNECTOR_TOKENS_HEADER
+        )
+        server_secret = conn.headers.get(DEFAULT_SERVER_SECRET_HEADER)
 
         # Parse connector tokens (Base64 URL-safe encoded JSON)
         connector_access_tokens = {}
         if connector_tokens_header:
-            connector_access_tokens = self._parse_connector_tokens(
-                connector_tokens_header
-            )
+            try:
+                connector_access_tokens = decode_connector_tokens(
+                    connector_tokens_header,
+                    logger=self.logger,
+                    raise_on_error=True,
+                )
+            except ValueError as exc:
+                raise AuthenticationError(
+                    "invalid connector tokens format"
+                ) from exc
 
         self.logger.debug(
             "X-North headers parsed. Has server_secret: %s, Has user_id_token: %s, Connector count: %d",
@@ -309,8 +347,16 @@ class NorthAuthBackend(AuthenticationBackend):
         self._validate_server_secret(server_secret)
         email = self._process_user_id_token(user_id_token)
 
+        context = NorthRequestContext(
+            user_id_token=user_id_token,
+            connector_tokens=connector_access_tokens,
+        )
+        conn.scope[NORTH_CONTEXT_SCOPE_KEY] = context
+
         self.logger.debug("X-North authentication successful")
-        return self._create_authenticated_user(email, connector_access_tokens)
+        return self._create_authenticated_user(
+            email, connector_access_tokens, user_id_token
+        )
 
     async def _authenticate_legacy_bearer(
         self, conn: HTTPConnection
@@ -358,9 +404,15 @@ class NorthAuthBackend(AuthenticationBackend):
         self._validate_server_secret(tokens.server_secret)
         email = self._process_user_id_token(tokens.user_id_token)
 
+        context = NorthRequestContext(
+            user_id_token=tokens.user_id_token,
+            connector_tokens=tokens.connector_access_tokens,
+        )
+        conn.scope[NORTH_CONTEXT_SCOPE_KEY] = context
+
         self.logger.debug("Legacy authentication successful")
         return self._create_authenticated_user(
-            email, tokens.connector_access_tokens
+            email, tokens.connector_access_tokens, tokens.user_id_token
         )
 
     async def authenticate(

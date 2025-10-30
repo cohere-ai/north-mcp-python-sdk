@@ -49,6 +49,8 @@ def echo(_: dict) -> dict:
 
 The middleware reads the `X-North-ID-Token` header (if present) and parses Base64-encoded JSON from `X-North-Connector-Tokens`. It never returns a 401—it simply exposes these values through a context variable and `request.state.north_context` for downstream handlers.
 
+When you use `NorthMCPServer`, the authentication stack now populates the same request context automatically, so utilities built against `get_north_request_context()` can be shared across FastMCP apps and fully authenticated servers.
+
 ## Examples
 
 This repository contains example servers that you can use as a quickstart. You can find them in the [examples directory](https://github.com/cohere-ai/north-mcp-python-sdk/tree/main/examples).

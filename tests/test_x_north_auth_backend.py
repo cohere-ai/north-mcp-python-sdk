@@ -5,7 +5,16 @@ from unittest.mock import Mock
 import jwt
 import pytest
 
-from north_mcp_python_sdk.auth import NorthAuthBackend, AuthenticatedNorthUser
+from north_mcp_python_sdk.auth import (
+    AuthContextMiddleware,
+    AuthenticatedNorthUser,
+    NorthAuthBackend,
+)
+from north_mcp_python_sdk.north_context import (
+    DEFAULT_USER_ID_TOKEN_HEADER,
+    NORTH_CONTEXT_SCOPE_KEY,
+    get_north_request_context,
+)
 from starlette.authentication import AuthenticationError
 
 
@@ -16,6 +25,7 @@ def create_mock_connection(headers: dict[str, str]) -> Mock:
     mock_conn.client = Mock()
     mock_conn.client.host = "127.0.0.1"
     mock_conn.client.port = 12345
+    mock_conn.scope = {"type": "http", "state": {}}
     return mock_conn
 
 
@@ -48,11 +58,13 @@ async def test_x_north_headers_success():
     credentials, user = await backend.authenticate(conn)
 
     assert isinstance(user, AuthenticatedNorthUser)
+    assert user.user_id_token == headers[DEFAULT_USER_ID_TOKEN_HEADER]
     assert user.email == "test@company.com"
     assert user.connector_access_tokens == {
         "google": "token123",
         "slack": "token456",
     }
+    assert conn.scope[NORTH_CONTEXT_SCOPE_KEY] == user.north_context
 
 
 @pytest.mark.asyncio
@@ -119,8 +131,10 @@ async def test_x_north_takes_precedence_over_bearer():
     credentials, user = await backend.authenticate(conn)
 
     # Should use X-North headers
+    assert user.user_id_token == headers[DEFAULT_USER_ID_TOKEN_HEADER]
     assert user.email == "xnorth@company.com"
     assert "google" in user.connector_access_tokens
+    assert conn.scope[NORTH_CONTEXT_SCOPE_KEY] == user.north_context
 
 
 @pytest.mark.asyncio
@@ -149,6 +163,8 @@ async def test_legacy_bearer_fallback():
 
     assert user.email == "legacy@company.com"
     assert user.connector_access_tokens == {"legacy": "legacy_token"}
+    assert user.user_id_token == user_token
+    assert conn.scope[NORTH_CONTEXT_SCOPE_KEY] == user.north_context
 
 
 @pytest.mark.asyncio
@@ -164,3 +180,42 @@ async def test_minimal_x_north_headers():
     assert isinstance(user, AuthenticatedNorthUser)
     assert user.email is None
     assert user.connector_access_tokens == {}
+    assert user.user_id_token is None
+    assert conn.scope[NORTH_CONTEXT_SCOPE_KEY] == user.north_context
+
+
+@pytest.mark.asyncio
+async def test_auth_context_middleware_shares_request_context():
+    """Auth context middleware should expose the shared request context."""
+
+    recorded_context = None
+
+    async def app(scope, receive, send):
+        nonlocal recorded_context
+        recorded_context = get_north_request_context()
+        assert scope["state"]["north_context"] == recorded_context
+
+    middleware = AuthContextMiddleware(app)
+    scope = {
+        "type": "http",
+        "user": AuthenticatedNorthUser(
+            connector_access_tokens={"google": "token123"},
+            email="user@company.com",
+            user_id_token="id-token",
+        ),
+        "state": {},
+    }
+
+    async def receive():
+        return {"type": "http.request"}
+
+    async def send(message):
+        pass
+
+    await middleware(scope, receive, send)
+
+    assert recorded_context is not None
+    assert recorded_context.connector_tokens == {"google": "token123"}
+    assert recorded_context.user_id_token == "id-token"
+    # Context should reset after the middleware call.
+    assert get_north_request_context().connector_tokens == {}
