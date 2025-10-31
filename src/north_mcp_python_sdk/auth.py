@@ -1,12 +1,8 @@
-import base64
+import asyncio
 import contextvars
-import json
 import logging
-import urllib.request
+from typing import Any
 
-import jwt
-from jwt import PyJWKClient
-from pydantic import BaseModel, Field, ValidationError
 from starlette.authentication import (
     AuthCredentials,
     AuthenticationBackend,
@@ -18,11 +14,23 @@ from starlette.requests import HTTPConnection
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-
-class AuthHeaderTokens(BaseModel):
-    server_secret: str | None
-    user_id_token: str | None
-    connector_access_tokens: dict[str, str] = Field(default_factory=dict)
+from .north_context import (
+    AuthHeaderTokens,
+    DEFAULT_CONNECTOR_TOKENS_HEADER,
+    DEFAULT_SERVER_SECRET_HEADER,
+    DEFAULT_USER_ID_TOKEN_HEADER,
+    NORTH_CONTEXT_SCOPE_KEY,
+    NorthRequestContext,
+    decode_connector_tokens,
+    parse_legacy_bearer_header,
+    reset_north_request_context,
+    set_north_request_context,
+)
+from .token_utils import (
+    TokenVerificationError,
+    decode_user_id_token,
+    verify_user_id_token,
+)
 
 
 class AuthenticatedNorthUser(BaseUser):
@@ -30,9 +38,20 @@ class AuthenticatedNorthUser(BaseUser):
         self,
         connector_access_tokens: dict[str, str],
         email: str | None = None,
+        user_id_token: str | None = None,
+        user_claims: dict[str, Any] | None = None,
     ):
         self.connector_access_tokens = connector_access_tokens
         self.email = email
+        self.user_id_token = user_id_token
+        if user_claims is None and user_id_token:
+            user_claims = decode_user_id_token(user_id_token)
+        self.user_claims = user_claims
+        self.north_context = NorthRequestContext(
+            user_id_token=user_id_token,
+            connector_tokens=connector_access_tokens,
+            user_claims=user_claims,
+        )
 
 
 class NorthAuthenticationMiddleware(AuthenticationMiddleware):
@@ -153,17 +172,51 @@ class AuthContextMiddleware:
             return await self.app(scope, receive, send)
 
         user = scope.get("user")
+        existing_context = scope.get(NORTH_CONTEXT_SCOPE_KEY)
+
+        def store_context(context: NorthRequestContext) -> None:
+            scope[NORTH_CONTEXT_SCOPE_KEY] = context
+            state = scope.get("state")
+            if isinstance(state, dict):
+                state["north_context"] = context
+            else:
+                if state is None:
+                    from starlette.datastructures import State
+
+                    state = State()
+                    scope["state"] = state
+                setattr(state, "north_context", context)
+
+        async def call_downstream() -> None:
+            try:
+                await self.app(scope, receive, send)
+            except RuntimeError as exc:
+                if "Task group is not initialized" in str(exc):
+                    self.logger.debug(
+                        "Streamable HTTP session manager not initialized; returning 202 placeholder response."
+                    )
+                    response = JSONResponse(
+                        {"error": "North MCP server not started"}, status_code=202
+                    )
+                    await response(scope, receive, send)
+                else:
+                    raise
 
         # For custom routes that don't require auth, user will be None
         if user is None:
             self.logger.debug(
                 "Custom route accessed without authentication (operational endpoint)"
             )
+            context = existing_context or NorthRequestContext()
+            store_context(context)
+
+            context_token = set_north_request_context(context)
             token = auth_context_var.set(None)
             try:
-                await self.app(scope, receive, send)
+                await call_downstream()
             finally:
                 auth_context_var.reset(token)
+                reset_north_request_context(context_token)
             return
 
         if not isinstance(user, AuthenticatedNorthUser):
@@ -179,11 +232,16 @@ class AuthContextMiddleware:
             list(user.connector_access_tokens.keys()),
         )
 
+        context = existing_context or user.north_context
+        store_context(context)
+
+        context_token = set_north_request_context(context)
         token = auth_context_var.set(user)
         try:
-            await self.app(scope, receive, send)
+            await call_downstream()
         finally:
             auth_context_var.reset(token)
+            reset_north_request_context(context_token)
 
 
 class NorthAuthBackend(AuthenticationBackend):
@@ -211,25 +269,11 @@ class NorthAuthBackend(AuthenticationBackend):
         return any(
             conn.headers.get(header)
             for header in [
-                "X-North-ID-Token",
-                "X-North-Connector-Tokens",
-                "X-North-Server-Secret",
+                DEFAULT_USER_ID_TOKEN_HEADER,
+                DEFAULT_CONNECTOR_TOKENS_HEADER,
+                DEFAULT_SERVER_SECRET_HEADER,
             ]
         )
-
-    def _parse_connector_tokens(self, header_value: str) -> dict[str, str]:
-        """Parse Base64 URL-safe encoded JSON connector tokens."""
-        try:
-            # Add padding if needed for Base64 decoding
-            padded = header_value + "=" * (4 - len(header_value) % 4)
-            decoded_json = base64.urlsafe_b64decode(padded).decode()
-            tokens = json.loads(decoded_json)
-            if not isinstance(tokens, dict):
-                raise ValueError("Connector tokens must be a JSON object")
-            return tokens
-        except Exception as e:
-            self.logger.debug("Failed to parse connector tokens: %s", e)
-            raise AuthenticationError("invalid connector tokens format")
 
     def _validate_server_secret(self, provided_secret: str | None) -> None:
         """Validate server secret matches expected value."""
@@ -237,45 +281,66 @@ class NorthAuthBackend(AuthenticationBackend):
             self.logger.debug("Server secret mismatch - access denied")
             raise AuthenticationError("access denied")
 
-    def _process_user_id_token(self, user_id_token: str | None) -> str | None:
-        """Process and validate user ID token, return email or None."""
+    async def _get_user_claims(
+        self, user_id_token: str | None
+    ) -> dict[str, Any] | None:
+        """Decode and optionally verify the user ID token, returning its claims."""
         if not user_id_token:
             return None
 
         try:
-            decoded_token = jwt.decode(
-                jwt=user_id_token,
-                verify=False,
-                options={"verify_signature": False},
-            )
-
             if self._trusted_issuers:
-                self._verify_token_signature(
-                    raw_token=user_id_token,
-                    decoded_token=decoded_token,
+                claims = await asyncio.to_thread(
+                    verify_user_id_token,
+                    user_id_token,
+                    self._trusted_issuers,
+                    logger=self.logger,
                 )
+                return dict(claims)
 
-            email = decoded_token.get("email")
-            self.logger.debug(
-                "Successfully decoded user ID token. Email: %s", email
+            claims = decode_user_id_token(
+                user_id_token, logger=self.logger
             )
+            return dict(claims) if claims is not None else None
+        except TokenVerificationError as exc:
+            self.logger.debug("Failed to verify user ID token: %s", exc)
+            detail = str(exc).lower() if str(exc) else "verification failed"
+            message = f"invalid user id token: {detail}"
+            raise AuthenticationError(message) from exc
 
-            return email
-        except (
-            jwt.DecodeError,
-            jwt.InvalidTokenError,
-            ValueError,
-            KeyError,
-        ) as e:
-            self.logger.debug("Failed to decode user ID token: %s", e)
-            raise AuthenticationError("invalid user id token")
+    async def _process_user_id_token(
+        self, user_id_token: str | None
+    ) -> tuple[str | None, dict[str, Any] | None]:
+        """Process and validate user ID token, returning email and claims."""
+        claims = await self._get_user_claims(user_id_token)
+
+        if not claims:
+            return None, None
+
+        try:
+            email = claims.get("email")
+        except AttributeError:  # pragma: no cover - defensive
+            email = None
+
+        self.logger.debug(
+            "Successfully decoded user ID token. Email: %s", email
+        )
+
+        return email if isinstance(email, str) else None, claims
 
     def _create_authenticated_user(
-        self, email: str | None, connector_access_tokens: dict[str, str]
+        self,
+        email: str | None,
+        connector_access_tokens: dict[str, str],
+        user_id_token: str | None,
+        user_claims: dict[str, Any] | None,
     ) -> tuple[AuthCredentials, AuthenticatedNorthUser]:
         """Create authenticated user from validated tokens."""
         return AuthCredentials(), AuthenticatedNorthUser(
-            connector_access_tokens=connector_access_tokens, email=email
+            connector_access_tokens=connector_access_tokens,
+            email=email,
+            user_id_token=user_id_token,
+            user_claims=user_claims,
         )
 
     async def _authenticate_x_north_headers(
@@ -285,16 +350,25 @@ class NorthAuthBackend(AuthenticationBackend):
         self.logger.debug("Using X-North headers for authentication")
 
         # Extract headers
-        user_id_token = conn.headers.get("X-North-ID-Token")
-        connector_tokens_header = conn.headers.get("X-North-Connector-Tokens")
-        server_secret = conn.headers.get("X-North-Server-Secret")
+        user_id_token = conn.headers.get(DEFAULT_USER_ID_TOKEN_HEADER)
+        connector_tokens_header = conn.headers.get(
+            DEFAULT_CONNECTOR_TOKENS_HEADER
+        )
+        server_secret = conn.headers.get(DEFAULT_SERVER_SECRET_HEADER)
 
         # Parse connector tokens (Base64 URL-safe encoded JSON)
         connector_access_tokens = {}
         if connector_tokens_header:
-            connector_access_tokens = self._parse_connector_tokens(
-                connector_tokens_header
-            )
+            try:
+                connector_access_tokens = decode_connector_tokens(
+                    connector_tokens_header,
+                    logger=self.logger,
+                    raise_on_error=True,
+                )
+            except ValueError as exc:
+                raise AuthenticationError(
+                    "invalid connector tokens format"
+                ) from exc
 
         self.logger.debug(
             "X-North headers parsed. Has server_secret: %s, Has user_id_token: %s, Connector count: %d",
@@ -307,10 +381,19 @@ class NorthAuthBackend(AuthenticationBackend):
         )
 
         self._validate_server_secret(server_secret)
-        email = self._process_user_id_token(user_id_token)
+        email, user_claims = await self._process_user_id_token(user_id_token)
+
+        context = NorthRequestContext(
+            user_id_token=user_id_token,
+            connector_tokens=connector_access_tokens,
+            user_claims=user_claims,
+        )
+        conn.scope[NORTH_CONTEXT_SCOPE_KEY] = context
 
         self.logger.debug("X-North authentication successful")
-        return self._create_authenticated_user(email, connector_access_tokens)
+        return self._create_authenticated_user(
+            email, connector_access_tokens, user_id_token, user_claims
+        )
 
     async def _authenticate_legacy_bearer(
         self, conn: HTTPConnection
@@ -330,37 +413,41 @@ class NorthAuthBackend(AuthenticationBackend):
             "Authorization header present (length: %d)", len(auth_header)
         )
 
-        auth_header = auth_header.replace("Bearer ", "", 1)
-
         try:
-            decoded_auth_header = base64.b64decode(auth_header).decode()
-            self.logger.debug("Successfully decoded base64 auth header")
-        except Exception as e:
-            self.logger.debug("Failed to decode base64 auth header: %s", e)
-            raise AuthenticationError("invalid authorization header")
+            tokens = parse_legacy_bearer_header(
+                auth_header, logger=self.logger, raise_on_error=True
+            )
+        except ValueError as exc:
+            raise AuthenticationError(str(exc)) from exc
 
-        try:
-            tokens = AuthHeaderTokens.model_validate_json(decoded_auth_header)
-            self.logger.debug(
-                "Successfully parsed auth tokens. Has server_secret: %s, Has user_id_token: %s, Connector count: %d",
-                tokens.server_secret is not None,
-                tokens.user_id_token is not None,
-                len(tokens.connector_access_tokens),
-            )
-            self.logger.debug(
-                "Available connectors: %s",
-                list(tokens.connector_access_tokens.keys()),
-            )
-        except ValidationError as e:
-            self.logger.debug("Failed to validate auth tokens: %s", e)
-            raise AuthenticationError("unable to decode bearer token")
+        assert tokens is not None  # for type checkers
+        self.logger.debug(
+            "Successfully parsed auth tokens. Has server_secret: %s, Has user_id_token: %s, Connector count: %d",
+            tokens.server_secret is not None,
+            tokens.user_id_token is not None,
+            len(tokens.connector_access_tokens),
+        )
+        self.logger.debug(
+            "Available connectors: %s",
+            list(tokens.connector_access_tokens.keys()),
+        )
 
         self._validate_server_secret(tokens.server_secret)
-        email = self._process_user_id_token(tokens.user_id_token)
+        email, user_claims = await self._process_user_id_token(tokens.user_id_token)
+
+        context = NorthRequestContext(
+            user_id_token=tokens.user_id_token,
+            connector_tokens=tokens.connector_access_tokens,
+            user_claims=user_claims,
+        )
+        conn.scope[NORTH_CONTEXT_SCOPE_KEY] = context
 
         self.logger.debug("Legacy authentication successful")
         return self._create_authenticated_user(
-            email, tokens.connector_access_tokens
+            email,
+            tokens.connector_access_tokens,
+            tokens.user_id_token,
+            user_claims,
         )
 
     async def authenticate(
@@ -377,54 +464,3 @@ class NorthAuthBackend(AuthenticationBackend):
 
         # Fall back to legacy Authorization Bearer header
         return await self._authenticate_legacy_bearer(conn)
-
-    def _verify_token_signature(
-        self, raw_token: str, decoded_token: dict
-    ) -> None:
-        self.logger.debug(
-            "Verifying user ID token signature against trusted issuers"
-        )
-        issuer = decoded_token.get("iss")
-        if not issuer:
-            raise AuthenticationError("Token missing issuer")
-
-        if issuer not in self._trusted_issuers:
-            raise AuthenticationError(f"Untrusted issuer: {issuer}")
-
-        openid_config_req = urllib.request.Request(
-            url=issuer.rstrip("/") + "/.well-known/openid-configuration"
-        )
-        try:
-            with urllib.request.urlopen(
-                openid_config_req, timeout=10
-            ) as response:
-                openid_config = json.load(response)
-        except (
-            urllib.error.URLError,
-            urllib.error.HTTPError,
-            json.JSONDecodeError,
-        ) as e:
-            self.logger.error(
-                f"Failed to fetch OpenID configuration from {issuer}: {e}"
-            )
-            raise AuthenticationError(
-                f"Failed to verify token: unable to fetch issuer configuration"
-            )
-
-        unverified_header = jwt.get_unverified_header(jwt=raw_token)
-        jwks_client = PyJWKClient(openid_config["jwks_uri"], cache_keys=True)
-        kid, algorithm = (
-            unverified_header.get("kid"),
-            unverified_header.get("alg", "RS256"),
-        )
-        if not kid:
-            raise AuthenticationError("Token missing key identifier")
-
-        # This will raise an exception if the signature is invalid
-        jwt.decode(
-            jwt=raw_token,
-            key=jwks_client.get_signing_key(kid).key,
-            algorithms=[algorithm],
-            issuer=issuer,
-            options={"verify_signature": True, "verify_aud": False},
-        )

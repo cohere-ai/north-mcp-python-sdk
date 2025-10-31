@@ -5,7 +5,19 @@ from unittest.mock import Mock
 import jwt
 import pytest
 
-from north_mcp_python_sdk.auth import NorthAuthBackend, AuthenticatedNorthUser
+from north_mcp_python_sdk.auth import (
+    AuthContextMiddleware,
+    AuthenticatedNorthUser,
+    NorthAuthBackend,
+)
+from north_mcp_python_sdk.north_context import (
+    AuthHeaderTokens,
+    DEFAULT_USER_ID_TOKEN_HEADER,
+    NORTH_CONTEXT_SCOPE_KEY,
+    NorthRequestContext,
+    get_north_request_context,
+    set_north_request_context,
+)
 from starlette.authentication import AuthenticationError
 
 
@@ -16,12 +28,18 @@ def create_mock_connection(headers: dict[str, str]) -> Mock:
     mock_conn.client = Mock()
     mock_conn.client.host = "127.0.0.1"
     mock_conn.client.port = 12345
+    mock_conn.scope = {"type": "http", "state": {}}
     return mock_conn
 
 
-def create_x_north_headers(email: str = "test@company.com") -> dict[str, str]:
+def create_x_north_headers(
+    email: str = "test@company.com", issuer: str | None = None
+) -> dict[str, str]:
     """Helper to create valid X-North headers."""
-    user_id_token = jwt.encode(payload={"email": email}, key="does-not-matter")
+    payload = {"email": email}
+    if issuer:
+        payload["iss"] = issuer
+    user_id_token = jwt.encode(payload=payload, key="does-not-matter")
     connector_tokens_json = json.dumps(
         {"google": "token123", "slack": "token456"}
     )
@@ -48,11 +66,13 @@ async def test_x_north_headers_success():
     credentials, user = await backend.authenticate(conn)
 
     assert isinstance(user, AuthenticatedNorthUser)
+    assert user.user_id_token == headers[DEFAULT_USER_ID_TOKEN_HEADER]
     assert user.email == "test@company.com"
     assert user.connector_access_tokens == {
         "google": "token123",
         "slack": "token456",
     }
+    assert conn.scope[NORTH_CONTEXT_SCOPE_KEY] == user.north_context
 
 
 @pytest.mark.asyncio
@@ -92,8 +112,6 @@ async def test_x_north_headers_invalid_auth():
 @pytest.mark.asyncio
 async def test_x_north_takes_precedence_over_bearer():
     """Test X-North headers take precedence over Authorization Bearer."""
-    from north_mcp_python_sdk.auth import AuthHeaderTokens
-
     backend = NorthAuthBackend(server_secret="server_secret")
 
     # Create conflicting tokens
@@ -119,15 +137,15 @@ async def test_x_north_takes_precedence_over_bearer():
     credentials, user = await backend.authenticate(conn)
 
     # Should use X-North headers
+    assert user.user_id_token == headers[DEFAULT_USER_ID_TOKEN_HEADER]
     assert user.email == "xnorth@company.com"
     assert "google" in user.connector_access_tokens
+    assert conn.scope[NORTH_CONTEXT_SCOPE_KEY] == user.north_context
 
 
 @pytest.mark.asyncio
 async def test_legacy_bearer_fallback():
     """Test legacy Authorization Bearer works when no X-North headers."""
-    from north_mcp_python_sdk.auth import AuthHeaderTokens
-
     backend = NorthAuthBackend(server_secret="server_secret")
 
     user_token = jwt.encode(
@@ -149,6 +167,8 @@ async def test_legacy_bearer_fallback():
 
     assert user.email == "legacy@company.com"
     assert user.connector_access_tokens == {"legacy": "legacy_token"}
+    assert user.user_id_token == user_token
+    assert conn.scope[NORTH_CONTEXT_SCOPE_KEY] == user.north_context
 
 
 @pytest.mark.asyncio
@@ -164,3 +184,90 @@ async def test_minimal_x_north_headers():
     assert isinstance(user, AuthenticatedNorthUser)
     assert user.email is None
     assert user.connector_access_tokens == {}
+    assert user.user_id_token is None
+    assert conn.scope[NORTH_CONTEXT_SCOPE_KEY] == user.north_context
+
+
+@pytest.mark.asyncio
+async def test_auth_context_middleware_shares_request_context():
+    """Auth context middleware should expose the shared request context."""
+
+    recorded_context = None
+
+    async def app(scope, receive, send):
+        nonlocal recorded_context
+        recorded_context = get_north_request_context()
+        assert scope["state"]["north_context"] == recorded_context
+
+    middleware = AuthContextMiddleware(app)
+    scope = {
+        "type": "http",
+        "user": AuthenticatedNorthUser(
+            connector_access_tokens={"google": "token123"},
+            email="user@company.com",
+            user_id_token="id-token",
+        ),
+        "state": {},
+    }
+
+    async def receive():
+        return {"type": "http.request"}
+
+    async def send(message):
+        pass
+
+    await middleware(scope, receive, send)
+
+    assert recorded_context is not None
+    assert recorded_context.connector_tokens == {"google": "token123"}
+    assert recorded_context.user_id_token == "id-token"
+    # Context persists until explicitly cleared to support background tasks.
+    # Simulate the start of a new request by clearing the context manually.
+    set_north_request_context(NorthRequestContext())
+    assert get_north_request_context().connector_tokens == {}
+
+
+@pytest.mark.asyncio
+async def test_trusted_issuer_rejects_untrusted_x_north():
+    backend = NorthAuthBackend(
+        server_secret="server_secret",
+        trusted_issuers=["https://trusted.example.com"],
+    )
+    headers = create_x_north_headers(
+        email="user@company.com",
+        issuer="https://evil.example.com",
+    )
+    conn = create_mock_connection(headers)
+
+    with pytest.raises(AuthenticationError, match="invalid user id token"):
+        await backend.authenticate(conn)
+
+
+@pytest.mark.asyncio
+async def test_trusted_issuer_rejects_untrusted_legacy_token():
+    backend = NorthAuthBackend(
+        server_secret="server_secret",
+        trusted_issuers=["https://trusted.example.com"],
+    )
+
+    user_token = jwt.encode(
+        payload={
+            "email": "legacy@company.com",
+            "iss": "https://evil.example.com",
+        },
+        key="test",
+    )
+    legacy_header = AuthHeaderTokens(
+        server_secret="server_secret",
+        user_id_token=user_token,
+        connector_access_tokens={"legacy": "legacy_token"},
+    )
+    legacy_b64 = base64.b64encode(
+        json.dumps(legacy_header.model_dump()).encode()
+    ).decode()
+
+    headers = {"Authorization": f"Bearer {legacy_b64}"}
+    conn = create_mock_connection(headers)
+
+    with pytest.raises(AuthenticationError, match="invalid user id token"):
+        await backend.authenticate(conn)

@@ -22,6 +22,35 @@ This repository provides code to enable your server to use authentication with N
 * You can access the user's identity (from the identity provider used with North).
 * **Debug mode** for detailed authentication logging and troubleshooting.
 
+## FastMCP Integration
+
+If you are building on top of `FastMCP` directly, you can install the lightweight middleware shipped with this SDK to capture North-specific context without enabling full authentication:
+
+```python
+from fastmcp import FastMCP
+from north_mcp_python_sdk.middleware import (
+    FastMCPNorthMiddleware,
+    get_north_request_context,
+)
+
+mcp = FastMCP("Demo")
+app = mcp.streamable_http_app()
+app.add_middleware(FastMCPNorthMiddleware)
+
+
+@mcp.tool()
+def echo(_: dict) -> dict:
+    ctx = get_north_request_context()
+    return {
+        "user_id_token": ctx.user_id_token,
+        "connector_tokens": ctx.connector_tokens,
+    }
+```
+
+The middleware reads the `X-North-ID-Token` header (if present) and parses Base64-encoded JSON from `X-North-Connector-Tokens`. It never returns a 401—it simply exposes these values through a context variable and `request.state.north_context` for downstream handlers.
+
+When you use `NorthMCPServer`, the authentication stack now populates the same request context automatically, so utilities built against `get_north_request_context()` can be shared across FastMCP apps and fully authenticated servers.
+
 ## Examples
 
 This repository contains example servers that you can use as a quickstart. You can find them in the [examples directory](https://github.com/cohere-ai/north-mcp-python-sdk/tree/main/examples).

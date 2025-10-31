@@ -13,6 +13,17 @@ from .auth import (
     NorthAuthenticationMiddleware,
     on_auth_error,
 )
+from .middleware import FastMCPNorthMiddleware
+from .north_context import (
+    NorthRequestContext,
+    NorthUser,
+    TokenVerificationError,
+    decode_user_id_token,
+    get_north_request_context,
+    get_north_user,
+    north_request_context_var,
+    verify_user_id_token,
+)
 
 
 def is_debug_mode() -> bool:
@@ -78,11 +89,30 @@ class NorthMCPServer(FastMCP):
             ),
             Middleware(AuthContextMiddleware, debug=self._debug),
         ]
-        app.user_middleware.extend(middleware)
+        protected_classes = {
+            NorthAuthenticationMiddleware,
+            AuthContextMiddleware,
+        }
+        remaining_middleware = [
+            entry
+            for entry in app.user_middleware
+            if entry.cls not in protected_classes
+        ]
+        app.user_middleware = middleware + remaining_middleware
+        app.middleware_stack = app.build_middleware_stack()
 
 
 # Convenience exports
 __all__ = [
     "NorthMCPServer",
     "is_debug_mode",
+    "FastMCPNorthMiddleware",
+    "NorthRequestContext",
+    "NorthUser",
+    "TokenVerificationError",
+    "decode_user_id_token",
+    "verify_user_id_token",
+    "get_north_request_context",
+    "get_north_user",
+    "north_request_context_var",
 ]

@@ -6,6 +6,7 @@ import jwt
 import pytest
 
 from north_mcp_python_sdk.auth import NorthAuthBackend, AuthenticatedNorthUser
+from north_mcp_python_sdk.north_context import NORTH_CONTEXT_SCOPE_KEY
 from starlette.authentication import AuthenticationError
 
 
@@ -16,6 +17,7 @@ def create_mock_connection(headers: dict[str, str]) -> Mock:
     mock_conn.client = Mock()
     mock_conn.client.host = "127.0.0.1"
     mock_conn.client.port = 12345
+    mock_conn.scope = {"type": "http", "state": {}}
     return mock_conn
 
 
@@ -60,6 +62,7 @@ async def test_x_north_headers_without_trusted_issuers():
 
     assert isinstance(user, AuthenticatedNorthUser)
     assert user.email == "test@company.com"
+    assert conn.scope[NORTH_CONTEXT_SCOPE_KEY] == user.north_context
 
 
 @pytest.mark.asyncio
@@ -81,7 +84,9 @@ async def test_x_north_headers_trusted_issuers_missing_issuer():
     }
     conn = create_mock_connection(headers)
 
-    with pytest.raises(AuthenticationError, match="Token missing issuer"):
+    with pytest.raises(
+        AuthenticationError, match="invalid user id token: token missing issuer"
+    ):
         await backend.authenticate(conn)
 
 
@@ -100,7 +105,9 @@ async def test_x_north_headers_trusted_issuers_untrusted_issuer():
     )
     conn = create_mock_connection(headers)
 
-    with pytest.raises(AuthenticationError, match="Untrusted issuer"):
+    with pytest.raises(
+        AuthenticationError, match="invalid user id token: untrusted issuer"
+    ):
         await backend.authenticate(conn)
 
 
@@ -128,6 +135,7 @@ async def test_x_north_headers_trusted_issuers_missing_kid():
     conn = create_mock_connection(headers)
 
     with pytest.raises(
-        AuthenticationError, match="Token missing key identifier"
+        AuthenticationError,
+        match="invalid user id token: token missing key identifier",
     ):
         await backend.authenticate(conn)
