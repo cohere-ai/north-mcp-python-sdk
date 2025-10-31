@@ -84,7 +84,9 @@ async def test_x_north_headers_trusted_issuers_missing_issuer():
     }
     conn = create_mock_connection(headers)
 
-    with pytest.raises(AuthenticationError, match="Token missing issuer"):
+    with pytest.raises(
+        AuthenticationError, match="invalid user id token: token missing issuer"
+    ):
         await backend.authenticate(conn)
 
 
@@ -103,7 +105,9 @@ async def test_x_north_headers_trusted_issuers_untrusted_issuer():
     )
     conn = create_mock_connection(headers)
 
-    with pytest.raises(AuthenticationError, match="Untrusted issuer"):
+    with pytest.raises(
+        AuthenticationError, match="invalid user id token: untrusted issuer"
+    ):
         await backend.authenticate(conn)
 
 
@@ -131,6 +135,7 @@ async def test_x_north_headers_trusted_issuers_missing_kid():
     conn = create_mock_connection(headers)
 
     with pytest.raises(
-        AuthenticationError, match="Token missing key identifier"
+        AuthenticationError,
+        match="invalid user id token: token missing key identifier",
     ):
         await backend.authenticate(conn)
