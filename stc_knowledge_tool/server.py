@@ -11,15 +11,24 @@ mcp = NorthMCPServer("MCP Server with K8s Endpoints", port=5222)
 
 @mcp.tool()
 def fetch_knowledge(key: str) -> str:
-    """This tool retrieves stc information stored in a simple key–value format. Each key corresponds to a specific category of internal corporate knowledge.
-The tool should be always when the user assumes internal stc knowledge is needed and the user query matches one of the predefined keys.
+    """This tool retrieves official stc internal knowledge stored in a simple key–value format. Each key corresponds to a specific category of corporate information.
+
+You MUST call this tool whenever the user's request relies on or implies internal stc-specific knowledge, even if the user does not mention “stc” explicitly.
+The tool should be used instead of general world knowledge whenever the query touches any of the domains covered by the available keys.
+
+## When to call the Tool
+You must call the tool if any of the following are true:
+    - The user requests writing, editing, or generating any content (call the tool with the style key).
+    - The user assumes the assistant already knows stc-specific information or asks a question framed from an internal perspective (e.g., "What is our strategy?", “How do we communicate X?”).
+    - The user asks a question that cannot be correctly answered without internal stc facts, even if the need is implicit and not directly stated.
+    - The user asks about, references, or implies information tied to one of the keys (definitions, summaries, explanations, examples, guidance, etc.).
 
 Available Keys:
-    - strategy — High-level company strategy
-    - style — Communication guidelines and tone
+    - strategy — stc's high-level strategic direction and priorities
+    - ai_strategy — stc’s AI vision, roadmap, and guiding principles
+    - style — communication guidelines for written communication like: email, messages, web page, branding marterials, end of year reports, etc. should be called then the user askes for writing or editing content,
     - hierarchy — Reporting structure or organizational hierarchy
-    - subsidiaries — List or description of stc subsidiaries
-    - ai_strategy — Company’s AI vision, principles, or roadmap
+    - subsidiaries — List of stc subsidiaries
     - diversity_and_inclusion — DEI principles and commitments
 """
     

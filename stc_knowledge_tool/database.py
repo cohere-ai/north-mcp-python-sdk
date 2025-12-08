@@ -370,7 +370,26 @@ Board Members:
 10. center3 center3 is a subsidiary owned 100% by stc Group. It possesses the group’s infrastructure assets, which include data centers and submarine cables. The company contributes to the Kingdom’s Vision 2030 of becoming a digital hub linking three continents: Asia, Africa, and Europe. 10.1 Product/Services: 10.1.1 Collocation and whitespace 10.1.2 DC connect 10.1.3 Metro Connect 10.1.4 IT transit 10.1.5 Terrestrial/subsea capacity 10.1.6 Landing station interconnect 10.1.7 MPLS VPN 10.1.8 Direct internet access 10.1.9 Datacenter hosting services 10.1.10 Connectivity Services 10.1.11 Subsea Services 10.1.12 Internet Services 10.2 Ownership: 100% 10.3 Creation: 2022 10.4 Countries of Operation: Saudi Arabia, Kuwait, Bahrain
 11. iot Squared IoT Squared, a joint venture between the stc Group and the PIF, was formed in 2022 to establish a model system for the IoT sector in the Middle East. 11.1 Product/Services: 11.1.1 Integrated solutions for Smart Cities and Mobility 11.1.2 Fleet Management 11.1.3 Intelligent warehouses 11.2 Ownership: 50% 11.3 Creation: 2022 11.4 Countries of Operation: Saudi Arabia, Bahrain, Kuwait
 """,
-    "ai_strategy": """##### Infrastructure & Tech Enablement
+    "ai_strategy": """#### AI in stc
+
+##### AI Strategy
+
+Since 2016, stc has embarked on a transformative journey, implementing substantial measures to cultivate a robust internal AI ecosystem.
+
+**Timeline:**
+
+ 1. <2014 a) EDW journey started in 2004. b) stc started to realize value in ~2012\. c) BI Strategy & Roadmap developed late 2014.
+ 2. 2015 a) BI Strategy endorsed by CEO. b) Analytics execution launched.
+ 3. 2016 a) Corp. Analytics sector created. b) ATTP Launched (~1\.5-year program) to consolidate IT & Corp. Analytics roadmaps.
+ 4. 2017 a) ATTP Concluded EoY. b) Insight Monetization Platform deployed at stcs. c) Major activities in Data Discrepancy concluded.
+ 5. 2018 a) TSA Digital Reference Architecture and DARE set Analytics ambitions. b) T&O crafted strategy with Analytics-focused theme. c) Activation of Data Governance (Data Quality Health Index, DG Policies). d) Set up Advanced Analytics unit (AI CoE) with significant ramp-up on delivery of 40+ internal & external use cases by a team with 80% fresh grads.
+ 6. 2019 a) T&O Strategy Data Driven Theme (4 Programs). b) stc won best operating model in Telco AI Summit Europe.
+ 7. 2020 a) Delivered COVID-19 insights for lockdown decisions. b) Concluded NVIDIA Partnership.
+ 8. 2021 a) Refreshed Data & AI infrastructure. b) Signed Ministry of Tourism monetization deal.
+ 9. 2022 a) Formulated CAD Data and AI strategy. b) Established Analytics Core to be dedicated to AI R&D.
+10. 2023 a) Accelerated Internal AI program. b) Received industry recognition by Gartner. c) Initiated stc Brain initiative to accelerate the implementation of Gen AI in stc.
+    
+    ##### Infrastructure & Tech Enablement
 
 State-of-the-Art Infrastructure: Integrates an array of powerful technologies to streamline processes, enabling efficient management of vast datasets, conducting advanced analytics, and deriving actionable insights. This cohesive framework empowers users to drive decision-making across various domains with unprecedented speed and accuracy, facilitating transformative advancements in AI and machine learning capabilities.
 
