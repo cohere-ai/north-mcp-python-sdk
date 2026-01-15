@@ -1,6 +1,6 @@
 [project]
 name = "north-mcp-python-sdk"
-version = "0.2.3"
+version = "0.2.4"
 description = "Add your description here"
 readme = "README.md"
 authors = [{ name = "Raphael Cristal", email = "raphael@cohere.com" }]
