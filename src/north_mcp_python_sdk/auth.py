@@ -286,6 +286,7 @@ class NorthAuthBackend(AuthenticationBackend):
 
         # Extract headers
         user_id_token = conn.headers.get("X-North-ID-Token")
+        user_email_header = conn.headers.get("X-North-User-Email")
         connector_tokens_header = conn.headers.get("X-North-Connector-Tokens")
         server_secret = conn.headers.get("X-North-Server-Secret")
 
@@ -308,6 +309,8 @@ class NorthAuthBackend(AuthenticationBackend):
 
         self._validate_server_secret(server_secret)
         email = self._process_user_id_token(user_id_token)
+        if email is None and user_email_header:
+            email = user_email_header
 
         self.logger.debug("X-North authentication successful")
         return self._create_authenticated_user(email, connector_access_tokens)
