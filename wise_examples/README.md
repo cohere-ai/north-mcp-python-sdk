@@ -278,6 +278,7 @@ curl --location --request DELETE "${HOST}/internal/v1/mcp_servers/<server_id>" \
 Your server is now running!
 
 Sign into North here to try it out!
+You must create a new account with this domain <code>wiseconference.com</code> to have access to North!
 
 ```bash
 https://gtxcc.democloud.cohere.com/
