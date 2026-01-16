@@ -1,0 +1,16 @@
+[project]
+name = "mcp-sample"
+version = "0.1.0"
+description = "Base environment for Calendar and Calculator tools"
+authors = [{ name = "Cohere" }]
+license = { text = "MIT" }
+requires-python = ">=3.11"
+
+dependencies = [
+    "httpx>=0.28.1",
+    "north-mcp-python-sdk @ git+https://github.com/cohere-ai/north-mcp-python-sdk.git@main",
+    "pydantic>=2.11.7",
+    "ngrok",
+    "google-auth-oauthlib",
+    "google-api-python-client",
+]
