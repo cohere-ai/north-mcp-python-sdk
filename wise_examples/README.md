@@ -224,7 +224,7 @@ Next we need to use these to get our access token.
 
 17. Add your downloaded JSON file with the Client ID and Client Secret to <code>client_secret.json</code>
 
-18. Run <code>get_google_access_token.py</code> and it'll output both an access token (will expire in ~1 hour) and a refresh token (will be used to create a new access token once it expires) !
+18. Run <code>get_google_access_token.py</code> and it'll output your access token. This will expire in 1 hour! To generate a new token just run the script again!
 
 We can now use all these tokens to hardcode our credentials in our google calendar mcp server
 
