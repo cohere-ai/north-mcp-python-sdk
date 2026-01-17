@@ -247,6 +247,9 @@ You can either add your access token to the top of your <code>simple_calendar.py
 
 ### 4. Add your MCP server to North
 
+NOTE: Tool names MUST be unique when creating your MCP server, so please prepend the tool name with a prefix such as 
+<code><first_name>_<last_name>_<tool_name></code>
+
 To get your North Token go to https://gtxcc.democloud.cohere.com/developer/python
 <p align="center">
   <img
@@ -265,7 +268,9 @@ export URL=<ngrok url>
 
 To see which servers are running:
 ```bash
-curl --location "${HOST}/internal/v1/mcp_servers" --header "Content-Type: application/json" --header "Authorization: Bearer ${NORTH_TOKEN}"
+curl --location "${HOST}/internal/v1/mcp_servers" \
+--header "Content-Type: application/json" \
+--header "Authorization: Bearer ${NORTH_TOKEN}"
 ```
 
 To register your server:
