@@ -10,7 +10,6 @@ dependencies = [
     "httpx>=0.28.1",
     "north-mcp-python-sdk @ git+https://github.com/cohere-ai/north-mcp-python-sdk.git@main",
     "pydantic>=2.11.7",
-    "ngrok",
     "google-auth-oauthlib",
     "google-api-python-client",
 ]
