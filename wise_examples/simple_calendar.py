@@ -6,6 +6,9 @@ from north_mcp_python_sdk import NorthMCPServer
 
 load_dotenv()
 
+# update all the mcp tool functions to be <firstname_lastname>_<tool>
+# since mcp tool names MUST be unique
+
 mcp = NorthMCPServer(
     name="Google Calendar",
     host="0.0.0.0",
@@ -141,7 +144,7 @@ def format_event_to_document(event):
 
 
 @mcp.tool()
-async def list_calendar_events(
+async def firstname_lastname_list_calendar_events(
     ctx: Context,
     max_results: int = 10,
     time_min: str = None,
@@ -204,7 +207,7 @@ async def list_calendar_events(
 # destructiveHint=True triggers safety prompts, asking the user to confirm
 # before creating a calendar event (prevents accidental data modifications)
 @mcp.tool(annotations={"destructiveHint": True})
-async def create_calendar_event(
+async def firstname_lastname_create_calendar_event(
     ctx: Context,
     title: str,
     start_time: str,
@@ -250,7 +253,7 @@ async def create_calendar_event(
 
 
 @mcp.tool()
-async def get_calendar_event(ctx: Context, event_id: str):
+async def firstname_lastname_get_calendar_event(ctx: Context, event_id: str):
     """Get detailed information about a specific calendar event
     Args:
         ctx: Request context
@@ -270,7 +273,7 @@ async def get_calendar_event(ctx: Context, event_id: str):
 # destructiveHint=True triggers safety prompts, asking the user to confirm
 # before deleting a calendar event (prevents accidental data loss)
 @mcp.tool(annotations={"destructiveHint": True})
-async def delete_calendar_event(ctx: Context, event_id: str):
+async def firstname_lastname_delete_calendar_event(ctx: Context, event_id: str):
     """Delete a calendar event by ID
     Args:
         ctx: Request context
@@ -291,7 +294,7 @@ async def delete_calendar_event(ctx: Context, event_id: str):
 # destructiveHint=True triggers safety prompts, asking the user to confirm
 # before updating a calendar event (prevents accidental data modifications)
 @mcp.tool(annotations={"destructiveHint": True})
-async def update_calendar_event(
+async def firstname_lastname_update_calendar_event(
     ctx: Context,
     event_id: str,
     title: str = None,
