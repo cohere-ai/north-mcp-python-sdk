@@ -34,6 +34,7 @@ Sign up for an account: https://dashboard.ngrok.com/signup\n \
 Install your authtoken: https://dashboard.ngrok.com/get-started/your-authtoken', 'ERR_NGROK_4018')
 ```
 
+
 You must create an account and get your authtoken
 ```bash
 https://dashboard.ngrok.com/signup
@@ -209,9 +210,18 @@ Back to Create OAuth client ID:
   />
 </p>
 
+16. Head to the Audience tab and click +Add users to add the Test users. Add your email here
+<p align="center">
+  <img
+    src="https://github.com/user-attachments/assets/e062463a-26a9-49bc-a64d-309450557b6e"
+    width="600"
+  />
+</p>
+
+
 Get Your Credentials:
 
-16. A popup shows your Client ID and Client Secret; Copy both and/or download the JSON file. You can always view them again in the Credentials page
+17. A popup shows your Client ID and Client Secret; Copy both and/or download the JSON file. You can always view them again in the Credentials page
 
 <p align="center">
   <img
@@ -222,11 +232,12 @@ Get Your Credentials:
 
 Next we need to use these to get our access token.
 
-17. Add your downloaded JSON file with the Client ID and Client Secret to <code>client_secret.json</code>
+18. Add your downloaded JSON file with the Client ID and Client Secret to <code>client_secret.json</code>
 
-18. Run <code>get_google_access_token.py</code> and it'll output your access token. This will expire in 1 hour! To generate a new token just run the script again!
+19. Run <code>get_google_access_token.py</code> and it'll output your access token. This will expire in 1 hour! To generate a new token just run the script again!
 
-We can now use all these tokens to hardcode our credentials in our google calendar mcp server
+We can now use the google access tokne in our google calendar mcp server.
+You can either add your access token to the top of your <code>simple_calendar.py</code> file as <code>ACCESS_TOKEN=""</code>, or add it to your <code>.env</code> and load it in.
 
 <br />
 
