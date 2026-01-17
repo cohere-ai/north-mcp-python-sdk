@@ -25,6 +25,8 @@ uv sync
 source .venv/bin/activate
 ```
 
+To install ngrok follow the instructions here https://ngrok.com/download
+
 If you have not previously run ngrok you will get the following error when running 
 ```bash 
 ngrok http <port>
