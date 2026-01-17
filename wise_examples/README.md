@@ -137,7 +137,7 @@ Step-by-step to get OAuth Client ID and Secret:
 
 Enable Calendar API:
 
-5. Go to "APIs & Services" → "Library" (left sidebar)
+5. Go to "APIs & Services" → "Library" (left sidebar). Note if it's not in the left sidebar then click on <code>View all Products</code> at the bottom left-hand side of the screen to view the Library.
 6. Search for "Google Calendar API"
 7. Click it and press "Enable"
 
