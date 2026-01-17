@@ -1,6 +1,6 @@
 ## Adding your own MCP server walkthough ##
 
-### 1. Get your enviornment set up ###
+### 1. Get your environment set up ###
 
 ```bash
 # clone this repo
