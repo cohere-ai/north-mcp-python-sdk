@@ -67,8 +67,6 @@ ngrok config add-authtoken $YOUR_AUTHTOKEN
 
 ### 2. Create your MCP servers
 
-_**Full code will be available after the workshop!**_
-
 ```bash
 code simple_calculator.py
 code <mcp_server_filename>
