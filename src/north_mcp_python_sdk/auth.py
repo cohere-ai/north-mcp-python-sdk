@@ -15,6 +15,7 @@ from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from .north_context import (
+    DEFAULT_USER_EMAIL_HEADER,
     AuthHeaderTokens,
     DEFAULT_CONNECTOR_TOKENS_HEADER,
     DEFAULT_SERVER_SECRET_HEADER,
@@ -267,7 +268,7 @@ class NorthAuthBackend(AuthenticationBackend):
     def _has_x_north_headers(self, conn: HTTPConnection) -> bool:
         """Check if any X-North headers are present."""
         return any(
-            conn.headers.get(header)
+            header in conn.headers
             for header in [
                 DEFAULT_USER_ID_TOKEN_HEADER,
                 DEFAULT_CONNECTOR_TOKENS_HEADER,
@@ -351,6 +352,7 @@ class NorthAuthBackend(AuthenticationBackend):
 
         # Extract headers
         user_id_token = conn.headers.get(DEFAULT_USER_ID_TOKEN_HEADER)
+        user_email_header = conn.headers.get(DEFAULT_USER_EMAIL_HEADER)
         connector_tokens_header = conn.headers.get(
             DEFAULT_CONNECTOR_TOKENS_HEADER
         )
@@ -382,6 +384,9 @@ class NorthAuthBackend(AuthenticationBackend):
 
         self._validate_server_secret(server_secret)
         email, user_claims = await self._process_user_id_token(user_id_token)
+
+        if email is None and user_email_header:
+            email = user_email_header
 
         context = NorthRequestContext(
             user_id_token=user_id_token,

@@ -24,6 +24,7 @@ except ModuleNotFoundError:  # pragma: no cover
 
 
 DEFAULT_USER_ID_TOKEN_HEADER = "X-North-ID-Token"
+DEFAULT_USER_EMAIL_HEADER = "X-North-User-Email"
 DEFAULT_CONNECTOR_TOKENS_HEADER = "X-North-Connector-Tokens"
 DEFAULT_SERVER_SECRET_HEADER = "X-North-Server-Secret"
 
