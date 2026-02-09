@@ -27,7 +27,9 @@ async def test_client(app: NorthMCPServer):
 @pytest_asyncio.fixture
 async def mcp_test_client(app: NorthMCPServer):
     async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app.http_app(transport="streamable-http")),
+        transport=httpx.ASGITransport(
+            app=app.http_app(transport="streamable-http")
+        ),
         base_url="https://mcptest.com",
     ) as client:
         yield client

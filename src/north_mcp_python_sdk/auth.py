@@ -64,6 +64,7 @@ class NorthAuthenticationMiddleware(AuthenticationMiddleware):
 
     No configuration needed - this behavior follows MCP best practices.
     """
+
     protected_paths: list[str]
     debug: bool
     logger: logging.Logger
@@ -72,7 +73,9 @@ class NorthAuthenticationMiddleware(AuthenticationMiddleware):
         self,
         app: ASGIApp,
         backend: AuthenticationBackend,
-        on_error: Callable[[HTTPConnection, AuthenticationError], JSONResponse],
+        on_error: Callable[
+            [HTTPConnection, AuthenticationError], JSONResponse
+        ],
         protected_paths: list[str] | None = None,
         debug: bool | None = None,
     ):
@@ -110,8 +113,8 @@ class NorthAuthenticationMiddleware(AuthenticationMiddleware):
 
         if not self._should_authenticate(path):
             self.logger.debug(
-                "Path %s is a custom route (likely operational endpoint like health check), " +
-                "bypassing authentication as intended for k8s/orchestration use",
+                "Path %s is a custom route (likely operational endpoint like health check), "
+                + "bypassing authentication as intended for k8s/orchestration use",
                 path,
             )
             # For non-protected paths, create a minimal unauthenticated user
@@ -132,9 +135,7 @@ auth_context_var = contextvars.ContextVar[AuthenticatedNorthUser | None](
 )
 
 
-def on_auth_error(
-    _: HTTPConnection, exc: AuthenticationError
-) -> JSONResponse:
+def on_auth_error(_: HTTPConnection, exc: AuthenticationError) -> JSONResponse:
     return JSONResponse({"error": str(exc)}, status_code=401)
 
 
@@ -278,7 +279,9 @@ class NorthAuthBackend(AuthenticationBackend):
                 tokens[key] = value
             else:
                 self.logger.debug(
-                    "Skipping non-string connector token entry: %s=%s", key, value
+                    "Skipping non-string connector token entry: %s=%s",
+                    key,
+                    value,
                 )
 
         return tokens
@@ -323,22 +326,32 @@ class NorthAuthBackend(AuthenticationBackend):
             raise AuthenticationError("invalid user id token")
 
     def _create_authenticated_user(
-        self, email: str | None, connector_access_tokens: dict[str, str], user_id_token: str | None
+        self,
+        email: str | None,
+        connector_access_tokens: dict[str, str],
+        user_id_token: str | None,
     ) -> tuple[AuthCredentials, AuthenticatedNorthUser]:
         """Create authenticated user from validated tokens."""
         if email is None:
-            self.logger.warning("Email is None, using empty AccessToken.client_id")
+            self.logger.warning(
+                "Email is None, using empty AccessToken.client_id"
+            )
         if user_id_token is None:
-            self.logger.warning("User ID token is None, using empty AccessToken.token")
+            self.logger.warning(
+                "User ID token is None, using empty AccessToken.token"
+            )
 
-        return AuthCredentials(), AuthenticatedNorthUser(
-            connector_access_tokens=connector_access_tokens,
-            email=email,
-            access_token=AccessToken(
-                token=user_id_token or "",
-                client_id=email or "",
-                scopes=[],
-                claims={}, # TODO: Review if connector access tokens should be added to claims
+        return (
+            AuthCredentials(),
+            AuthenticatedNorthUser(
+                connector_access_tokens=connector_access_tokens,
+                email=email,
+                access_token=AccessToken(
+                    token=user_id_token or "",
+                    client_id=email or "",
+                    scopes=[],
+                    claims={},  # TODO: Review if connector access tokens should be added to claims
+                ),
             ),
         )
 
@@ -377,7 +390,9 @@ class NorthAuthBackend(AuthenticationBackend):
             email = user_email_header
 
         self.logger.debug("X-North authentication successful")
-        return self._create_authenticated_user(email, connector_access_tokens, user_id_token)
+        return self._create_authenticated_user(
+            email, connector_access_tokens, user_id_token
+        )
 
     async def _authenticate_legacy_bearer(
         self, conn: HTTPConnection
@@ -477,7 +492,7 @@ class NorthAuthBackend(AuthenticationBackend):
                 f"Failed to fetch OpenID configuration from {issuer}: {e}"
             )
             raise AuthenticationError(
-                f"Failed to verify token: unable to fetch issuer configuration"
+                "Failed to verify token: unable to fetch issuer configuration"
             )
 
         unverified_header = jwt.get_unverified_header(jwt=raw_token)
@@ -521,7 +536,10 @@ class NorthTokenVerifier(AuthProvider):
 
     Example:
         ```python
-        from north_mcp_python_sdk import NorthTokenVerifier, get_authenticated_user
+        from north_mcp_python_sdk import (
+            NorthTokenVerifier,
+            get_authenticated_user,
+        )
         from fastmcp import FastMCP
 
         # With token verification against trusted issuers
@@ -534,6 +552,7 @@ class NorthTokenVerifier(AuthProvider):
         auth = NorthTokenVerifier()
 
         mcp = FastMCP("my-server", auth=auth)
+
 
         @mcp.tool()
         def my_tool():
@@ -578,8 +597,12 @@ class NorthTokenVerifier(AuthProvider):
 
     @override
     async def verify_token(self, token: str) -> AccessToken | None:
-        self.logger.debug(f"NorthTokenVerifier verify_token: {token} | Token check not implemented in TokenVerifier class")
-        raise NotImplementedError("Token check not implemented in NorthTokenVerifier class. See NorthAuthBackend instead.")
+        self.logger.debug(
+            f"NorthTokenVerifier verify_token: {token} | Token check not implemented in TokenVerifier class"
+        )
+        raise NotImplementedError(
+            "Token check not implemented in NorthTokenVerifier class. See NorthAuthBackend instead."
+        )
 
     @override
     def get_middleware(self) -> list[Middleware]:

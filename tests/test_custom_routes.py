@@ -91,7 +91,9 @@ async def test_client():
     """Create test client for custom routes testing."""
     server = create_test_server()
     async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=server.http_app(transport="streamable-http")),
+        transport=httpx.ASGITransport(
+            app=server.http_app(transport="streamable-http")
+        ),
         base_url="http://test",
     ) as client:
         yield client
@@ -121,13 +123,13 @@ async def test_custom_routes_without_auth(test_client):
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "running"
-    assert data["authenticated"] == False
+    assert not data["authenticated"]
 
     # Test auth-info endpoint without auth
     response = await test_client.get("/auth-info")
     assert response.status_code == 200
     data = response.json()
-    assert data["authenticated"] == False
+    assert not data["authenticated"]
 
 
 @pytest.mark.asyncio
@@ -212,7 +214,7 @@ async def test_custom_routes_with_optional_auth(test_client):
     headers = {"Authorization": create_auth_header()}
     response = await test_client.get("/auth-info", headers=headers)
     assert response.status_code == 200
-    data = response.json()
+    response.json()
     # Note: will be False because we don't have a valid user_id_token in our test
     # but the important thing is that it doesn't return 401
     assert response.status_code == 200
