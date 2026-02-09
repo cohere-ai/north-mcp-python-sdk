@@ -1,13 +1,11 @@
 import base64
 import binascii
-import contextvars
 import json
 import logging
 from typing import Any, Callable, override
 import urllib.request
 
 from fastmcp.server.auth import AccessToken, AuthProvider
-from fastmcp.server.dependencies import get_http_request
 import jwt
 from jwt import PyJWKClient
 from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
@@ -29,21 +27,6 @@ class AuthHeaderTokens(BaseModel):
     server_secret: str | None
     user_id_token: str | None
     connector_access_tokens: dict[str, str] = Field(default_factory=dict)
-
-
-class AuthenticatedNorthUser(AuthenticatedUser):
-    connector_access_tokens: dict[str, str]
-    email: str | None
-
-    def __init__(
-        self,
-        access_token: AccessToken,
-        connector_access_tokens: dict[str, str],
-        email: str | None = None,
-    ):
-        super().__init__(auth_info=access_token)
-        self.connector_access_tokens = connector_access_tokens
-        self.email = email
 
 
 class NorthAuthenticationMiddleware(AuthenticationMiddleware):
@@ -130,88 +113,8 @@ class NorthAuthenticationMiddleware(AuthenticationMiddleware):
         return await super().__call__(scope, receive, send)
 
 
-auth_context_var = contextvars.ContextVar[AuthenticatedNorthUser | None](
-    "north_auth_context", default=None
-)
-
-
 def on_auth_error(_: HTTPConnection, exc: AuthenticationError) -> JSONResponse:
     return JSONResponse({"error": str(exc)}, status_code=401)
-
-
-def get_authenticated_user() -> AuthenticatedNorthUser:
-    # https://github.com/jlowin/fastmcp/pull/2505
-    request = get_http_request()
-    user: BaseUser | None = request.scope.get("user")
-
-    if isinstance(user, AuthenticatedNorthUser):
-        return user
-
-    user = auth_context_var.get()
-
-    if not user:
-        raise Exception("user not found in context")
-
-    return user
-
-
-class AuthContextMiddleware:
-    """
-    Middleware that extracts the authenticated user from the request
-    and sets it in a contextvar for easy access throughout the request lifecycle.
-
-    This middleware should be added after the AuthenticationMiddleware in the
-    middleware stack to ensure that the user is properly authenticated before
-    being stored in the context.
-    """
-
-    app: ASGIApp
-    debug: bool
-    logger: logging.Logger
-
-    def __init__(self, app: ASGIApp, debug: bool | None = None):
-        self.app = app
-        self.debug = debug if debug is not None else False
-        self.logger = logging.getLogger("NorthMCP.AuthContext")
-        if debug:
-            self.logger.setLevel(logging.DEBUG)
-
-    async def __call__(self, scope: Scope, receive: Receive, send: Send):
-        if scope["type"] == "lifespan":
-            return await self.app(scope, receive, send)
-
-        user: BaseUser | None = scope.get("user")
-
-        # For custom routes that don't require auth, user will be None
-        if user is None:
-            self.logger.debug(
-                "Custom route accessed without authentication (operational endpoint)"
-            )
-            token = auth_context_var.set(None)
-            try:
-                await self.app(scope, receive, send)
-            finally:
-                auth_context_var.reset(token)
-            return
-
-        if not isinstance(user, AuthenticatedNorthUser):
-            self.logger.debug(
-                "Authentication failed: user not found in context. User type: %s",
-                user.__class__.__name__,
-            )
-            raise AuthenticationError("user not found in context")
-
-        self.logger.debug(
-            "Setting authenticated user in context: email=%s, connectors=%s",
-            user.email,
-            list(user.connector_access_tokens.keys()),
-        )
-
-        token = auth_context_var.set(user)
-        try:
-            await self.app(scope, receive, send)
-        finally:
-            auth_context_var.reset(token)
 
 
 class NorthAuthBackend(AuthenticationBackend):
@@ -330,7 +233,7 @@ class NorthAuthBackend(AuthenticationBackend):
         email: str | None,
         connector_access_tokens: dict[str, str],
         user_id_token: str | None,
-    ) -> tuple[AuthCredentials, AuthenticatedNorthUser]:
+    ) -> tuple[AuthCredentials, AuthenticatedUser]:
         """Create authenticated user from validated tokens."""
         if email is None:
             self.logger.warning(
@@ -341,16 +244,19 @@ class NorthAuthBackend(AuthenticationBackend):
                 "User ID token is None, using empty AccessToken.token"
             )
 
+        # TODO: Consider if headers with prefix should be added to claims
+        # TODO: Should a namespace be added to claim keys?
         return (
             AuthCredentials(),
-            AuthenticatedNorthUser(
-                connector_access_tokens=connector_access_tokens,
-                email=email,
-                access_token=AccessToken(
+            AuthenticatedUser(
+                auth_info=AccessToken(
                     token=user_id_token or "",
                     client_id=email or "",
                     scopes=[],
-                    claims={},  # TODO: Review if connector access tokens should be added to claims
+                    claims={
+                        "connector_access_tokens": connector_access_tokens,
+                        "email": email,
+                    },
                 ),
             ),
         )
@@ -621,5 +527,4 @@ class NorthTokenVerifier(AuthProvider):
                 on_error=on_auth_error,
                 debug=self.debug,
             ),
-            Middleware(AuthContextMiddleware, debug=self.debug),
         ]
