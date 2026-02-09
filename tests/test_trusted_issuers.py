@@ -36,7 +36,7 @@ class TestTrustedIssuers:
             yield client
 
     @staticmethod
-    def create_test_token(payload: dict, headers: dict = None) -> str:
+    def create_test_token(payload: dict[str, str], headers: dict[str, str] | None = None) -> str:
         """Helper to create test JWT tokens."""
         return jwt.encode(
             payload=payload,
@@ -46,7 +46,7 @@ class TestTrustedIssuers:
         )
 
     @staticmethod
-    def create_auth_header(user_id_token: str = None) -> str:
+    def create_auth_header(user_id_token: str | None = None) -> str:
         """Helper to create base64 encoded auth header."""
         if user_id_token is None:
             user_id_token = TestTrustedIssuers.create_test_token(
@@ -86,7 +86,7 @@ class TestTrustedIssuers:
         server = NorthMCPServer(name="test-server")  # No trusted_issuers
 
         async with httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=server.streamable_http_app()),
+            transport=httpx.ASGITransport(app=server.http_app(transport="streamable-http")),
             base_url="https://mcptest.com",
         ) as client:
             token = TestTrustedIssuers.create_test_token(

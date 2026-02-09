@@ -56,7 +56,10 @@ async def test_x_north_headers_without_trusted_issuers():
     )
     conn = create_mock_connection(headers)
 
-    credentials, user = await backend.authenticate(conn)
+    auth_response = await backend.authenticate(conn)
+    if auth_response is None:
+        raise ValueError("Authentication response is None")
+    _, user = auth_response
 
     assert isinstance(user, AuthenticatedNorthUser)
     assert user.email == "test@company.com"

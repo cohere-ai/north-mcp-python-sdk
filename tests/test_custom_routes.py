@@ -91,7 +91,7 @@ async def test_client():
     """Create test client for custom routes testing."""
     server = create_test_server()
     async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=server.streamable_http_app()),
+        transport=httpx.ASGITransport(app=server.http_app(transport="streamable-http")),
         base_url="http://test",
     ) as client:
         yield client
@@ -102,7 +102,7 @@ async def sse_test_client():
     """Create test client for SSE routes testing."""
     server = create_test_server()
     async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=server.sse_app()),
+        transport=httpx.ASGITransport(app=server.http_app(transport="sse")),
         base_url="http://test",
     ) as client:
         yield client

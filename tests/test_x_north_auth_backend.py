@@ -45,7 +45,10 @@ async def test_x_north_headers_success():
     headers = create_x_north_headers("test@company.com")
     conn = create_mock_connection(headers)
 
-    credentials, user = await backend.authenticate(conn)
+    auth_response = await backend.authenticate(conn)
+    if auth_response is None:
+        raise ValueError("Authentication response is None")
+    _, user = auth_response
 
     assert isinstance(user, AuthenticatedNorthUser)
     assert user.email == "test@company.com"
@@ -84,7 +87,11 @@ async def test_x_north_headers_invalid_auth():
     headers["X-North-ID-Token"] = invalid_jwt
     conn = create_mock_connection(headers)
 
-    credentials, user = await backend.authenticate(conn)
+    auth_response = await backend.authenticate(conn)
+    if auth_response is None:
+        raise ValueError("Authentication response is None")
+    _, user = auth_response
+
     assert isinstance(user, AuthenticatedNorthUser)
     assert user.email is None  # email should be None when missing from token
 
@@ -116,9 +123,13 @@ async def test_x_north_takes_precedence_over_bearer():
     }
     conn = create_mock_connection(headers)
 
-    credentials, user = await backend.authenticate(conn)
+    auth_response = await backend.authenticate(conn)
+    if auth_response is None:
+        raise ValueError("Authentication response is None")
+    _, user = auth_response
 
     # Should use X-North headers
+    assert isinstance(user, AuthenticatedNorthUser)
     assert user.email == "xnorth@company.com"
     assert "google" in user.connector_access_tokens
 
@@ -145,8 +156,12 @@ async def test_legacy_bearer_fallback():
     headers = {"Authorization": f"Bearer {legacy_b64}"}
     conn = create_mock_connection(headers)
 
-    credentials, user = await backend.authenticate(conn)
+    auth_response = await backend.authenticate(conn)
+    if auth_response is None:
+        raise ValueError("Authentication response is None")
+    _, user = auth_response
 
+    assert isinstance(user, AuthenticatedNorthUser)
     assert user.email == "legacy@company.com"
     assert user.connector_access_tokens == {"legacy": "legacy_token"}
 
@@ -159,7 +174,10 @@ async def test_minimal_x_north_headers():
     headers = {"X-North-Server-Secret": "server_secret"}
     conn = create_mock_connection(headers)
 
-    credentials, user = await backend.authenticate(conn)
+    auth_response = await backend.authenticate(conn)
+    if auth_response is None:
+        raise ValueError("Authentication response is None")
+    _, user = auth_response
 
     assert isinstance(user, AuthenticatedNorthUser)
     assert user.email is None

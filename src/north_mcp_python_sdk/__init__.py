@@ -2,17 +2,9 @@ import logging
 import os
 from typing import Any
 
-from mcp.server.auth.provider import OAuthAuthorizationServerProvider
-from mcp.server.fastmcp import FastMCP
-from starlette.applications import Starlette
-from starlette.middleware import Middleware
+from fastmcp import FastMCP
 
-from .auth import (
-    AuthContextMiddleware,
-    NorthAuthBackend,
-    NorthAuthenticationMiddleware,
-    on_auth_error,
-)
+from .auth import NorthTokenVerifier
 
 
 def is_debug_mode() -> bool:
@@ -21,18 +13,30 @@ def is_debug_mode() -> bool:
 
 
 class NorthMCPServer(FastMCP):
+    _server_secret: str | None
+    _trusted_issuers: list[str] | None
+    _debug: bool
+    _logger: logging.Logger
+
     def __init__(
         self,
         name: str | None = None,
         instructions: str | None = None,
         server_secret: str | None = None,
         trusted_issuers: list[str] | None = None,
-        auth_server_provider: OAuthAuthorizationServerProvider[Any, Any, Any]
-        | None = None,
         debug: bool | None = None,
         **settings: Any,
     ):
-        super().__init__(name, instructions, auth_server_provider, **settings)
+        super().__init__(
+            name=name,
+            instructions=instructions,
+            **settings,
+            auth=NorthTokenVerifier(
+                server_secret=server_secret,
+                trusted_issuers=trusted_issuers,
+                debug=debug if debug is not None else is_debug_mode(),
+            ),
+        )
         self._server_secret = server_secret
         self._trusted_issuers = trusted_issuers
 
@@ -53,32 +57,6 @@ class NorthMCPServer(FastMCP):
         else:
             self._logger = logging.getLogger(f"NorthMCP.{name or 'Server'}")
             self._logger.setLevel(logging.INFO)
-
-    def sse_app(self, mount_path: str | None = None) -> Starlette:
-        app = super().sse_app(mount_path=mount_path)
-        self._add_middleware(app)
-        return app
-
-    def streamable_http_app(self) -> Starlette:
-        app = super().streamable_http_app()
-        self._add_middleware(app)
-        return app
-
-    def _add_middleware(self, app: Starlette) -> None:
-        middleware = [
-            Middleware(
-                NorthAuthenticationMiddleware,
-                backend=NorthAuthBackend(
-                    self._server_secret,
-                    debug=self._debug,
-                    trusted_issuers=self._trusted_issuers,
-                ),
-                on_error=on_auth_error,
-                debug=self._debug,
-            ),
-            Middleware(AuthContextMiddleware, debug=self._debug),
-        ]
-        app.user_middleware.extend(middleware)
 
 
 # Convenience exports

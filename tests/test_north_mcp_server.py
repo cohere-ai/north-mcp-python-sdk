@@ -18,7 +18,7 @@ def app() -> NorthMCPServer:
 @pytest_asyncio.fixture
 async def test_client(app: NorthMCPServer):
     async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app.sse_app()),
+        transport=httpx.ASGITransport(app=app.http_app(transport="sse")),
         base_url="https://mcptest.com",
     ) as client:
         yield client
@@ -27,7 +27,7 @@ async def test_client(app: NorthMCPServer):
 @pytest_asyncio.fixture
 async def mcp_test_client(app: NorthMCPServer):
     async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app.streamable_http_app()),
+        transport=httpx.ASGITransport(app=app.http_app(transport="streamable-http")),
         base_url="https://mcptest.com",
     ) as client:
         yield client
@@ -69,7 +69,7 @@ async def test_missing_server_secret():
     app = NorthMCPServer(server_secret="secret")
 
     async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app.sse_app()),
+        transport=httpx.ASGITransport(app=app.http_app(transport="sse")),
         base_url="https://mcptest.com",
     ) as client:
         user_id_token = jwt.encode(
@@ -96,7 +96,7 @@ async def test_invalid_server_secret():
     app = NorthMCPServer(server_secret="secret")
 
     async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app.sse_app()),
+        transport=httpx.ASGITransport(app=app.http_app(transport="sse")),
         base_url="https://mcptest.com",
     ) as client:
         user_id_token = jwt.encode(
