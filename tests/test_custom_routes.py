@@ -9,6 +9,7 @@ import base64
 import pytest
 import pytest_asyncio
 import httpx
+from asgi_lifespan import LifespanManager
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse
 
@@ -90,24 +91,26 @@ def create_auth_header() -> str:
 async def test_client():
     """Create test client for custom routes testing."""
     server = create_test_server()
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(
-            app=server.http_app(transport="streamable-http")
-        ),
-        base_url="http://test",
-    ) as client:
-        yield client
+    app = server.http_app(transport="streamable-http")
+    async with LifespanManager(app) as manager:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=manager.app),
+            base_url="http://test",
+        ) as client:
+            yield client
 
 
 @pytest_asyncio.fixture
 async def sse_test_client():
     """Create test client for SSE routes testing."""
     server = create_test_server()
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=server.http_app(transport="sse")),
-        base_url="http://test",
-    ) as client:
-        yield client
+    app = server.http_app(transport="sse")
+    async with LifespanManager(app) as manager:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=manager.app),
+            base_url="http://test",
+        ) as client:
+            yield client
 
 
 @pytest.mark.asyncio
