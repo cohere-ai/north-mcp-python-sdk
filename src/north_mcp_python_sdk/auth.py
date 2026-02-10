@@ -188,7 +188,7 @@ class NorthAuthBackend(AuthenticationBackend):
     def _has_x_north_headers(self, conn: HTTPConnection) -> bool:
         """Check if any X-North headers are present."""
         return any(
-            header in conn.headers
+            header in conn.headers and conn.headers[header].strip() != ""
             for header in [
                 "X-North-ID-Token",
                 "X-North-Connector-Tokens",
@@ -210,11 +210,12 @@ class NorthAuthBackend(AuthenticationBackend):
             decoded_json = decoded_bytes.decode()
             parsed = json.loads(decoded_json)
         except (ValueError, json.JSONDecodeError, binascii.Error) as e:
-            self.logger.debug("Failed to parse connector tokens: %s", e)
-            raise AuthenticationError("invalid connector tokens format")
+            self.logger.warning("Failed to parse connector tokens: %s", e)
+            return {}
 
         if not isinstance(parsed, dict):
-            raise AuthenticationError("connector tokens must be a JSON object")
+            self.logger.warning("Connector tokens must be a JSON object")
+            return {}
 
         # Validate and filter to ensure string keys and values only
         tokens: dict[str, str] = {}
@@ -232,7 +233,7 @@ class NorthAuthBackend(AuthenticationBackend):
 
     def _validate_server_secret(self, provided_secret: str | None) -> None:
         """Validate server secret matches expected value."""
-        if self._server_secret and self._server_secret != provided_secret:
+        if (self._server_secret and self._server_secret != provided_secret) or (not self._server_secret and provided_secret):
             self.logger.debug("Server secret mismatch - access denied")
             raise AuthenticationError("access denied")
 
@@ -309,10 +310,22 @@ class NorthAuthBackend(AuthenticationBackend):
         self.logger.debug("Using X-North headers for authentication")
 
         # Extract headers
+        # Auth Headers
         user_id_token = conn.headers.get("X-North-ID-Token")
-        user_email_header = conn.headers.get("X-North-User-Email")
-        connector_tokens_header = conn.headers.get("X-North-Connector-Tokens")
         server_secret = conn.headers.get("X-North-Server-Secret")
+
+        if not user_id_token and not server_secret:
+            self.logger.debug("No X-North-ID-Token or X-North-Server-Secret header present")
+            raise AuthenticationError("no authentication headers present")
+
+        self._validate_server_secret(server_secret)
+        token_email = self._process_user_id_token(user_id_token)
+
+        self.logger.debug("X-North authentication successful")
+
+        # Additional Headers
+        connector_tokens_header = conn.headers.get("X-North-Connector-Tokens")
+        user_email_header = conn.headers.get("X-North-User-Email")
 
         # Parse connector tokens (Base64 URL-safe encoded JSON)
         connector_access_tokens = {}
@@ -320,6 +333,10 @@ class NorthAuthBackend(AuthenticationBackend):
             connector_access_tokens = self._parse_connector_tokens(
                 connector_tokens_header
             )
+
+        email = token_email
+        if token_email is None and user_email_header:
+            email = user_email_header
 
         self.logger.debug(
             "X-North headers parsed. Has server_secret: %s, Has user_id_token: %s, Connector count: %d",
@@ -331,15 +348,7 @@ class NorthAuthBackend(AuthenticationBackend):
             "Available connectors: %s", list(connector_access_tokens.keys())
         )
 
-        self._validate_server_secret(server_secret)
-        email = self._process_user_id_token(user_id_token)
-        if email is None and user_email_header:
-            email = user_email_header
-
-        self.logger.debug("X-North authentication successful")
-        return self._create_authenticated_user(
-            email, connector_access_tokens, user_id_token
-        )
+        return self._create_authenticated_user(email, connector_access_tokens, user_id_token)
 
     async def _authenticate_legacy_bearer(
         self, conn: HTTPConnection
