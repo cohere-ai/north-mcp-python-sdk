@@ -209,7 +209,7 @@ class NorthAuthBackend(AuthenticationBackend):
     def _has_x_north_headers(self, conn: HTTPConnection) -> bool:
         """Check if any X-North headers are present."""
         return any(
-            header in conn.headers and conn.headers[header] != ""
+            header in conn.headers and conn.headers[header].strip() != ""
             for header in [
                 "X-North-ID-Token",
                 "X-North-Connector-Tokens",
@@ -233,7 +233,7 @@ class NorthAuthBackend(AuthenticationBackend):
 
     def _validate_server_secret(self, provided_secret: str | None) -> None:
         """Validate server secret matches expected value."""
-        if self._server_secret and self._server_secret != provided_secret:
+        if (self._server_secret and self._server_secret != provided_secret) or (not self._server_secret and provided_secret):
             self.logger.debug("Server secret mismatch - access denied")
             raise AuthenticationError("access denied")
 
