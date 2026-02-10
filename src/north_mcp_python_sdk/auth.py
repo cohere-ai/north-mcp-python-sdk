@@ -4,8 +4,13 @@ import json
 import logging
 from typing import Any, Callable, override
 import urllib.request
+try:
+    from typing_extensions import deprecated
+except ImportError:
+    from warnings import deprecated
 
 from fastmcp.server.auth import AccessToken, AuthProvider
+from fastmcp.server.dependencies import get_access_token
 import jwt
 from jwt import PyJWKClient
 from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
@@ -27,6 +32,41 @@ class AuthHeaderTokens(BaseModel):
     server_secret: str | None
     user_id_token: str | None
     connector_access_tokens: dict[str, str] = Field(default_factory=dict)
+
+
+class AuthenticatedNorthUser(BaseUser):
+    connector_access_tokens: dict[str, str]
+    email: str | None
+
+    def __init__(
+        self,
+        connector_access_tokens: dict[str, str],
+        email: str | None = None,
+    ):
+        self.connector_access_tokens = connector_access_tokens
+        self.email = email
+
+
+class AuthenticatedNorthUserClaims(BaseModel):
+    connector_access_tokens: dict[str, str]
+    email: str | None
+
+
+@deprecated("Use get_access_token to fetch authenticated user context.")
+def get_authenticated_user() -> AuthenticatedNorthUser:
+    access_token = get_access_token()
+
+    if access_token is None:
+        raise Exception("Access token not found in context. Cannot construct AuthenticatedNorthUser.")
+
+    claims = access_token.claims
+
+    try:
+        claims = AuthenticatedNorthUserClaims.model_validate(claims)
+    except ValidationError as e:
+        raise Exception(f"Failed to validate claims: {e}") from e
+
+    return AuthenticatedNorthUser(claims.connector_access_tokens, claims.email)
 
 
 class NorthAuthenticationMiddleware(AuthenticationMiddleware):
