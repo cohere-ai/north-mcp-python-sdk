@@ -5,6 +5,7 @@ import logging
 from typing import Any, Callable, override
 import urllib.error
 import urllib.request
+from warnings import warn
 try:
     from typing_extensions import deprecated
 except ImportError:
@@ -233,6 +234,9 @@ class NorthAuthBackend(AuthenticationBackend):
 
     def _validate_server_secret(self, provided_secret: str | None) -> None:
         """Validate server secret matches expected value."""
+        if provided_secret:
+            warn("X-North-Server-Secret is deprecated. Use X-North-ID-Token header instead.", DeprecationWarning)
+
         if (self._server_secret and self._server_secret != provided_secret) or (not self._server_secret and provided_secret):
             self.logger.debug("Server secret mismatch - access denied")
             raise AuthenticationError("access denied")
@@ -330,6 +334,7 @@ class NorthAuthBackend(AuthenticationBackend):
         # Parse connector tokens (Base64 URL-safe encoded JSON)
         connector_access_tokens = {}
         if connector_tokens_header:
+            warn("X-North-Connector-Tokens is deprecated. Use custom headers instead.", DeprecationWarning)
             connector_access_tokens = self._parse_connector_tokens(
                 connector_tokens_header
             )
