@@ -476,49 +476,45 @@ class NorthAuthBackend(AuthenticationBackend):
 
 class NorthTokenVerifier(AuthProvider):
     """
-    FastMCP-compatible auth provider for North authentication.
+    FastMCP AuthProvider that verifies tokens against trusted OIDC issuers.
 
-    This provider integrates North's authentication system with FastMCP,
-    supporting both X-North headers and legacy Authorization Bearer tokens.
+    This class integrates with FastMCP's authentication system by providing
+    middleware that validates incoming requests. It supports both X-North
+    headers and standard Authorization Bearer tokens.
 
-    The provider:
-    - Validates user ID tokens against trusted issuers (if configured)
-    - Extracts connector access tokens for downstream API calls
-    - Only authenticates MCP protocol paths (/mcp, /sse, /messages/*)
-    - Allows custom routes (health checks, metrics) to bypass authentication
-    - Provides user context via `get_authenticated_user()` helper
+    Authentication is only enforced on MCP protocol paths (/mcp, /sse,
+    /messages/*). Custom routes (health checks, metrics, etc.) bypass
+    authentication automatically.
 
     Args:
-        trusted_issuers: List of trusted issuer URLs for token verification.
-            If not provided, tokens are decoded but not cryptographically verified.
-        server_secret: Optional server secret for additional request validation.
+        trusted_issuers: List of OIDC issuer URLs for cryptographic token
+            verification. If not provided, tokens are decoded but signatures
+            are not verified.
+        server_secret: Optional secret for additional request validation.
+        required_scopes: Optional list of scopes the token must contain.
         debug: Enable debug logging for authentication flow.
 
     Example:
         ```python
-        from north_mcp_python_sdk import (
-            NorthTokenVerifier,
-            get_authenticated_user,
-        )
         from fastmcp import FastMCP
+        from fastmcp.server.dependencies import get_access_token
+        from north_mcp_python_sdk.auth import NorthTokenVerifier
 
-        # With token verification against trusted issuers
-        auth = NorthTokenVerifier(
-            trusted_issuers=["https://auth.north.app"],
-            server_secret="my-secret",  # Optional
-        )
+        # Configure North authentication
+        auth = NorthTokenVerifier(trusted_issuers=["https://auth.north.app"])
 
-        # Without verification (tokens decoded but not verified)
-        auth = NorthTokenVerifier()
-
-        mcp = FastMCP("my-server", auth=auth)
-
+        # Create the MCP server with North auth
+        mcp = FastMCP("my-mcp-server", auth=auth)
 
         @mcp.tool()
-        def my_tool():
-            user = get_authenticated_user()
-            # Access user.email, user.connector_access_tokens, etc.
-            ...
+        def whoami() -> dict:
+            \"\"\"Get the authenticated user's access token.\"\"\"
+            token = get_access_token()
+            return token.model_dump() if token else {"error": "No access token"}
+
+        # Run with streamable HTTP
+        if __name__ == "__main__":
+            mcp.run(transport="http", host="localhost", port=8000)
         ```
     """
 
