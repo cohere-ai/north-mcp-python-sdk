@@ -228,7 +228,7 @@ class NorthAuthBackend(AuthenticationBackend):
                 raise ValueError("Connector tokens must be a JSON object")
             return tokens
         except Exception as e:
-            self.logger.debug("Failed to parse connector tokens: %s", e)
+            self.logger.warning("Failed to parse connector tokens: %s", e)
             return {}
 
     def _validate_server_secret(self, provided_secret: str | None) -> None:
