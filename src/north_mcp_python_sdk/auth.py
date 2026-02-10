@@ -229,7 +229,7 @@ class NorthAuthBackend(AuthenticationBackend):
             return tokens
         except Exception as e:
             self.logger.debug("Failed to parse connector tokens: %s", e)
-            raise AuthenticationError("invalid connector tokens format")
+            return {}
 
     def _validate_server_secret(self, provided_secret: str | None) -> None:
         """Validate server secret matches expected value."""
@@ -285,10 +285,22 @@ class NorthAuthBackend(AuthenticationBackend):
         self.logger.debug("Using X-North headers for authentication")
 
         # Extract headers
+        # Auth Headers
         user_id_token = conn.headers.get("X-North-ID-Token")
-        user_email_header = conn.headers.get("X-North-User-Email")
-        connector_tokens_header = conn.headers.get("X-North-Connector-Tokens")
         server_secret = conn.headers.get("X-North-Server-Secret")
+
+        if not user_id_token and not server_secret:
+            self.logger.debug("No X-North-ID-Token or X-North-Server-Secret header present")
+            raise AuthenticationError("no authentication headers present")
+
+        self._validate_server_secret(server_secret)
+        token_email = self._process_user_id_token(user_id_token)
+
+        self.logger.debug("X-North authentication successful")
+
+        # Additional Headers
+        connector_tokens_header = conn.headers.get("X-North-Connector-Tokens")
+        user_email_header = conn.headers.get("X-North-User-Email")
 
         # Parse connector tokens (Base64 URL-safe encoded JSON)
         connector_access_tokens = {}
@@ -296,6 +308,10 @@ class NorthAuthBackend(AuthenticationBackend):
             connector_access_tokens = self._parse_connector_tokens(
                 connector_tokens_header
             )
+
+        email = token_email
+        if token_email is None and user_email_header:
+            email = user_email_header
 
         self.logger.debug(
             "X-North headers parsed. Has server_secret: %s, Has user_id_token: %s, Connector count: %d",
@@ -307,12 +323,6 @@ class NorthAuthBackend(AuthenticationBackend):
             "Available connectors: %s", list(connector_access_tokens.keys())
         )
 
-        self._validate_server_secret(server_secret)
-        email = self._process_user_id_token(user_id_token)
-        if email is None and user_email_header:
-            email = user_email_header
-
-        self.logger.debug("X-North authentication successful")
         return self._create_authenticated_user(email, connector_access_tokens)
 
     async def _authenticate_legacy_bearer(
