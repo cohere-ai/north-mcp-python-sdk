@@ -3,6 +3,7 @@ import binascii
 import json
 import logging
 from typing import Any, Callable, override
+import urllib.error
 import urllib.request
 try:
     from typing_extensions import deprecated
@@ -429,9 +430,8 @@ class NorthAuthBackend(AuthenticationBackend):
             ) as response:
                 openid_config = json.load(response)
         except (
-            # TODO: Do these exceptions exist?
-            # urllib.error.URLError,
-            # urllib.error.HTTPError,
+            urllib.error.URLError,
+            urllib.error.HTTPError,
             json.JSONDecodeError,
         ) as e:
             self.logger.error(
