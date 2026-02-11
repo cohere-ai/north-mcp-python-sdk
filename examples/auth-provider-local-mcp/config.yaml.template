@@ -1,0 +1,20 @@
+# Dex configuration template
+# Environment variables are substituted at container startup
+
+issuer: ${DEX_ISSUER}
+storage:
+  type: memory
+web:
+  http: 0.0.0.0:5886
+staticClients:
+  - id: ${CLIENT_ID}
+    redirectURIs:
+      - '${SERVER_BASE_URL}/auth/callback'
+    name: 'Example App'
+    secret: ${CLIENT_SECRET}
+enablePasswordDB: true
+staticPasswords:
+  - email: "admin@example.com"
+    hash: "$2a$10$2b2cU8CPhOTaGrs1HRQuAueS7JTT5ZHsHSzYiFPm1leZck7Mc8T4W"
+    username: "admin"
+    userID: "1234"
