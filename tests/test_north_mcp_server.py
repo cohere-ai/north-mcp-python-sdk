@@ -130,7 +130,7 @@ async def test_invalid_server_secret():
 async def test_missing_email_in_user_id_token(test_client: httpx.AsyncClient):
     user_id_token = jwt.encode(payload={}, key="does-not-matter")
     header = AuthHeaderTokens(
-        server_secret="server_secret",
+        server_secret=None,  # Server has no secret, so don't send one
         user_id_token=user_id_token,
         connector_access_tokens={"google": "abc"},
     )
@@ -151,7 +151,7 @@ async def test_valid_auth_header(
         payload={"email": "test@company.com"}, key="does-not-matter"
     )
     header = AuthHeaderTokens(
-        server_secret="server_secret",
+        server_secret=None,  # Server has no secret, so don't send one
         user_id_token=user_id_token,
         connector_access_tokens={"google": "abc"},
     )
@@ -175,7 +175,7 @@ async def test_valid_auth_header_no_bearer(
         payload={"email": "test@company.com"}, key="does-not-matter"
     )
     header = AuthHeaderTokens(
-        server_secret="server_secret",
+        server_secret=None,  # Server has no secret, so don't send one
         user_id_token=user_id_token,
         connector_access_tokens={"google": "abc"},
     )

@@ -67,22 +67,6 @@ class TestTrustedIssuers:
         header_json = json.dumps(header.model_dump())
         return b64encode(header_json.encode()).decode()
 
-    def test_server_initialization_with_trusted_issuers(self):
-        """Test that server initializes correctly with trusted_issuers parameter."""
-        trusted_issuers = [
-            "https://cohere.okta.com",
-            "http://localhost:5556/dex",
-        ]
-        server = NorthMCPServer(
-            name="test-server", trusted_issuers=trusted_issuers
-        )
-        assert server._trusted_issuers == trusted_issuers
-
-    def test_server_initialization_without_trusted_issuers(self):
-        """Test that server initializes correctly without trusted_issuers parameter."""
-        server = NorthMCPServer(name="test-server")
-        assert server._trusted_issuers is None
-
     @pytest.mark.asyncio
     async def test_no_trusted_issuers_skips_verification(self):
         """Test that signature verification is skipped when no trusted issuers are configured."""

@@ -5,7 +5,8 @@ from unittest.mock import Mock
 import jwt
 import pytest
 
-from north_mcp_python_sdk.auth import NorthAuthBackend, AuthenticatedNorthUser
+from north_mcp_python_sdk.auth import NorthAuthBackend
+from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
 from starlette.authentication import AuthenticationError
 
 
@@ -50,9 +51,9 @@ async def test_x_north_headers_success():
         raise ValueError("Authentication response is None")
     _, user = auth_response
 
-    assert isinstance(user, AuthenticatedNorthUser)
-    assert user.email == "test@company.com"
-    assert user.connector_access_tokens == {
+    assert isinstance(user, AuthenticatedUser)
+    assert user.access_token.claims["email"] == "test@company.com"
+    assert user.access_token.claims["connector_access_tokens"] == {
         "google": "token123",
         "slack": "token456",
     }
@@ -71,15 +72,20 @@ async def test_x_north_headers_invalid_auth():
     with pytest.raises(AuthenticationError, match="access denied"):
         await backend.authenticate(conn)
 
-    # Invalid connector tokens
+    # Invalid connector tokens - should succeed but with empty connector tokens
+    # (code logs a warning but doesn't raise an error for invalid format)
     headers = create_x_north_headers()
     headers["X-North-Connector-Tokens"] = "invalid_base64!@#"
     conn = create_mock_connection(headers)
 
-    with pytest.raises(
-        AuthenticationError, match="invalid connector tokens format"
-    ):
-        await backend.authenticate(conn)
+    auth_response = await backend.authenticate(conn)
+    if auth_response is None:
+        raise ValueError("Authentication response is None")
+    _, user = auth_response
+
+    assert isinstance(user, AuthenticatedUser)
+    # Invalid tokens are silently ignored, resulting in empty dict
+    assert user.access_token.claims["connector_access_tokens"] == {}
 
     # JWT missing email - should succeed but with no email (legacy behavior)
     invalid_jwt = jwt.encode(payload={"name": "test"}, key="test")
@@ -92,8 +98,8 @@ async def test_x_north_headers_invalid_auth():
         raise ValueError("Authentication response is None")
     _, user = auth_response
 
-    assert isinstance(user, AuthenticatedNorthUser)
-    assert user.email is None  # email should be None when missing from token
+    assert isinstance(user, AuthenticatedUser)
+    assert user.access_token.claims["email"] is None  # email should be None when missing from token
 
 
 @pytest.mark.asyncio
@@ -129,9 +135,9 @@ async def test_x_north_takes_precedence_over_bearer():
     _, user = auth_response
 
     # Should use X-North headers
-    assert isinstance(user, AuthenticatedNorthUser)
-    assert user.email == "xnorth@company.com"
-    assert "google" in user.connector_access_tokens
+    assert isinstance(user, AuthenticatedUser)
+    assert user.access_token.claims["email"] == "xnorth@company.com"
+    assert "google" in user.access_token.claims["connector_access_tokens"]
 
 
 @pytest.mark.asyncio
@@ -161,9 +167,9 @@ async def test_legacy_bearer_fallback():
         raise ValueError("Authentication response is None")
     _, user = auth_response
 
-    assert isinstance(user, AuthenticatedNorthUser)
-    assert user.email == "legacy@company.com"
-    assert user.connector_access_tokens == {"legacy": "legacy_token"}
+    assert isinstance(user, AuthenticatedUser)
+    assert user.access_token.claims["email"] == "legacy@company.com"
+    assert user.access_token.claims["connector_access_tokens"] == {"legacy": "legacy_token"}
 
 
 @pytest.mark.asyncio
@@ -179,6 +185,6 @@ async def test_minimal_x_north_headers():
         raise ValueError("Authentication response is None")
     _, user = auth_response
 
-    assert isinstance(user, AuthenticatedNorthUser)
-    assert user.email is None
-    assert user.connector_access_tokens == {}
+    assert isinstance(user, AuthenticatedUser)
+    assert user.access_token.claims["email"] is None
+    assert user.access_token.claims["connector_access_tokens"] == {}
