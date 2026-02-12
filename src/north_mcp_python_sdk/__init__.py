@@ -13,8 +13,6 @@ def is_debug_mode() -> bool:
 
 
 class NorthMCPServer(FastMCP):
-    _server_secret: str | None
-    _trusted_issuers: list[str] | None
     _debug: bool
     _logger: logging.Logger
 
@@ -37,8 +35,6 @@ class NorthMCPServer(FastMCP):
                 debug=debug if debug is not None else is_debug_mode(),
             ),
         )
-        self._server_secret = server_secret
-        self._trusted_issuers = trusted_issuers
 
         # Auto-enable debug mode from environment variable if not explicitly set
         if debug is None:
