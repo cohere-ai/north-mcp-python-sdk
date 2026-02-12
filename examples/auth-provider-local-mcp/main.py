@@ -13,7 +13,7 @@ from starlette.middleware.cors import CORSMiddleware
 from fastmcp import FastMCP
 from fastmcp.server.dependencies import get_access_token
 
-from north_mcp_python_sdk.auth import NorthTokenVerifier
+from north_mcp_python_sdk import NorthTokenVerifier, get_north_context
 
 # ============================================================================
 # Configuration (from environment)
@@ -30,8 +30,12 @@ logging.getLogger("north").setLevel(logging.DEBUG)
 
 DEX_ISSUER = os.getenv("DEX_ISSUER", "http://localhost:5886/dex")
 DEX_JWKS_URI = os.getenv("DEX_JWKS_URI", "http://localhost:5886/dex/keys")
-DEX_AUTH_ENDPOINT = os.getenv("DEX_AUTH_ENDPOINT", "http://localhost:5886/dex/auth")
-DEX_TOKEN_ENDPOINT = os.getenv("DEX_TOKEN_ENDPOINT", "http://localhost:5886/dex/token")
+DEX_AUTH_ENDPOINT = os.getenv(
+    "DEX_AUTH_ENDPOINT", "http://localhost:5886/dex/auth"
+)
+DEX_TOKEN_ENDPOINT = os.getenv(
+    "DEX_TOKEN_ENDPOINT", "http://localhost:5886/dex/token"
+)
 CLIENT_ID = os.getenv("CLIENT_ID", "example-app")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET", "ZXhhbXBsZS1hcHAtc2VjcmV0")
 SERVER_BASE_URL = os.getenv("SERVER_BASE_URL", "http://localhost:5885")
@@ -39,13 +43,18 @@ SERVER_HOST = os.getenv("SERVER_HOST", "localhost")
 SERVER_PORT = int(os.getenv("SERVER_PORT", "5885"))
 
 # North auth configuration
-NORTH_TRUSTED_ISSUERS = os.getenv("NORTH_TRUSTED_ISSUERS", "").split(",") if os.getenv("NORTH_TRUSTED_ISSUERS") else None
+NORTH_TRUSTED_ISSUERS = (
+    os.getenv("NORTH_TRUSTED_ISSUERS", "").split(",")
+    if os.getenv("NORTH_TRUSTED_ISSUERS")
+    else None
+)
 NORTH_SERVER_SECRET = os.getenv("NORTH_SERVER_SECRET")
 
 
 # ============================================================================
 # Custom OAuthProxy with Upstream Token Logging
 # ============================================================================
+
 
 class LoggingOAuthProxy(OAuthProxy):
     """OAuthProxy that logs the upstream token for debugging."""
@@ -68,9 +77,13 @@ class LoggingOAuthProxy(OAuthProxy):
                 key=jti_mapping.upstream_token_id
             )
             if upstream_token_set:
-                print(f"[UPSTREAM TOKEN] access_token:\n{upstream_token_set.access_token}\n")
+                print(
+                    f"[UPSTREAM TOKEN] access_token:\n{upstream_token_set.access_token}\n"
+                )
             else:
-                print(f"[UPSTREAM TOKEN] No upstream token found for JTI: {jti}")
+                print(
+                    f"[UPSTREAM TOKEN] No upstream token found for JTI: {jti}"
+                )
 
         except Exception as e:
             print(f"[UPSTREAM TOKEN] Error fetching upstream token: {e}")
@@ -82,6 +95,7 @@ class LoggingOAuthProxy(OAuthProxy):
 # ============================================================================
 # Auth Builders
 # ============================================================================
+
 
 def build_jwt_verifier() -> JWTVerifier:
     """Build a JWTVerifier for token validation."""
@@ -115,7 +129,9 @@ def build_north_verifier() -> NorthTokenVerifier:
     )
 
 
-def build_auth(auth_type: Literal["none", "jwt", "oauth-proxy", "north"] = "none") -> AuthProvider | None:
+def build_auth(
+    auth_type: Literal["none", "jwt", "oauth-proxy", "north"] = "none",
+) -> AuthProvider | None:
     """Build the auth provider based on the specified type."""
     match auth_type:
         case "none":
@@ -131,6 +147,7 @@ def build_auth(auth_type: Literal["none", "jwt", "oauth-proxy", "north"] = "none
 # ============================================================================
 # MCP Server Builder
 # ============================================================================
+
 
 def build_mcp(auth: AuthProvider | None) -> FastMCP:
     """Build and configure the MCP server with tools."""
@@ -150,6 +167,11 @@ def build_mcp(auth: AuthProvider | None) -> FastMCP:
             return {"error": "No access token found"}
 
         return access_token.model_dump()
+
+    @mcp.tool()
+    def get_context() -> dict[str, str]:
+        """Get the North context from the current request."""
+        return get_north_context()
 
     return mcp
 
@@ -182,6 +204,7 @@ def build_app(mcp: FastMCP) -> Starlette:
 # ============================================================================
 # CLI
 # ============================================================================
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -221,6 +244,7 @@ def main():
     app = build_app(mcp)
 
     import uvicorn
+
     uvicorn.run(app, host=args.host, port=args.port)
 
 

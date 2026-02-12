@@ -6,13 +6,14 @@ from typing import Any, Callable, override
 import urllib.error
 import urllib.request
 from warnings import warn
+
 try:
     from typing_extensions import deprecated
 except ImportError:
     from warnings import deprecated
 
 from fastmcp.server.auth import AccessToken, AuthProvider
-from fastmcp.server.dependencies import get_access_token
+from fastmcp.server.dependencies import get_access_token, get_http_headers
 import jwt
 from jwt import PyJWKClient
 from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
@@ -59,7 +60,9 @@ def get_authenticated_user() -> AuthenticatedNorthUser:
     access_token = get_access_token()
 
     if access_token is None:
-        raise Exception("Access token not found in context. Cannot construct AuthenticatedNorthUser.")
+        raise Exception(
+            "Access token not found in context. Cannot construct AuthenticatedNorthUser."
+        )
 
     claims = access_token.claims
 
@@ -69,6 +72,30 @@ def get_authenticated_user() -> AuthenticatedNorthUser:
         raise Exception(f"Failed to validate claims: {e}") from e
 
     return AuthenticatedNorthUser(claims.connector_access_tokens, claims.email)
+
+
+def get_north_context() -> dict[str, str]:
+    """
+    Get the North context from the current request.
+
+    Returns a dictionary of context values extracted from request headers
+    prefixed with `X-North-Context-*`. For example, a header
+    `X-North-Context-AAA: BBB` would result in `{"AAA": "BBB"}`.
+
+    Returns:
+        dict[str, str]: A dictionary mapping context keys to their values.
+    """
+    headers = get_http_headers(include_all=True)
+
+    context: dict[str, str] = {}
+    prefix = "x-north-context-"
+
+    for header_name, header_value in headers.items():
+        if header_name.lower().startswith(prefix):
+            key = header_name[len(prefix) :]
+            context[key] = header_value
+
+    return context
 
 
 class NorthAuthenticationMiddleware(AuthenticationMiddleware):
@@ -235,9 +262,14 @@ class NorthAuthBackend(AuthenticationBackend):
     def _validate_server_secret(self, provided_secret: str | None) -> None:
         """Validate server secret matches expected value."""
         if provided_secret:
-            warn("X-North-Server-Secret is deprecated. Use X-North-ID-Token header instead.", DeprecationWarning)
+            warn(
+                "X-North-Server-Secret is deprecated. Use X-North-ID-Token header instead.",
+                DeprecationWarning,
+            )
 
-        if (self._server_secret and self._server_secret != provided_secret) or (not self._server_secret and provided_secret):
+        if (
+            self._server_secret and self._server_secret != provided_secret
+        ) or (not self._server_secret and provided_secret):
             self.logger.debug("Server secret mismatch - access denied")
             raise AuthenticationError("access denied")
 
@@ -290,8 +322,6 @@ class NorthAuthBackend(AuthenticationBackend):
                 "User ID token is None, using empty AccessToken.token"
             )
 
-        # TODO: Consider if headers with prefix should be added to claims
-        # TODO: Should a namespace be added to claim keys?
         return (
             AuthCredentials(),
             AuthenticatedUser(
@@ -319,7 +349,9 @@ class NorthAuthBackend(AuthenticationBackend):
         server_secret = conn.headers.get("X-North-Server-Secret")
 
         if not user_id_token and not server_secret:
-            self.logger.debug("No X-North-ID-Token or X-North-Server-Secret header present")
+            self.logger.debug(
+                "No X-North-ID-Token or X-North-Server-Secret header present"
+            )
             raise AuthenticationError("no authentication headers present")
 
         self._validate_server_secret(server_secret)
@@ -334,7 +366,10 @@ class NorthAuthBackend(AuthenticationBackend):
         # Parse connector tokens (Base64 URL-safe encoded JSON)
         connector_access_tokens = {}
         if connector_tokens_header:
-            warn("X-North-Connector-Tokens is deprecated. Use custom headers instead.", DeprecationWarning)
+            warn(
+                "X-North-Connector-Tokens is deprecated. Use custom headers instead.",
+                DeprecationWarning,
+            )
             connector_access_tokens = self._parse_connector_tokens(
                 connector_tokens_header
             )
@@ -353,7 +388,9 @@ class NorthAuthBackend(AuthenticationBackend):
             "Available connectors: %s", list(connector_access_tokens.keys())
         )
 
-        return self._create_authenticated_user(email, connector_access_tokens, user_id_token)
+        return self._create_authenticated_user(
+            email, connector_access_tokens, user_id_token
+        )
 
     async def _authenticate_legacy_bearer(
         self, conn: HTTPConnection

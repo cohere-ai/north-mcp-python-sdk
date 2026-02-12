@@ -4,7 +4,7 @@ from typing import Any
 
 from fastmcp import FastMCP
 
-from .auth import NorthTokenVerifier
+from .auth import NorthTokenVerifier, get_north_context
 
 
 def is_debug_mode() -> bool:
@@ -62,5 +62,7 @@ class NorthMCPServer(FastMCP):
 # Convenience exports
 __all__ = [
     "NorthMCPServer",
+    "NorthTokenVerifier",
     "is_debug_mode",
+    "get_north_context",
 ]
