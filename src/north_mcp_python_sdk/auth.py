@@ -566,7 +566,6 @@ class NorthTokenVerifier(AuthProvider):
         trusted_issuers: list[str] | None = None,
         *,
         server_secret: str | None = None,
-        required_scopes: list[str] | None = None,
         debug: bool | None = None,
     ):
         super().__init__()
@@ -591,11 +590,9 @@ class NorthTokenVerifier(AuthProvider):
     @override
     async def verify_token(self, token: str) -> AccessToken | None:
         self.logger.debug(
-            f"NorthTokenVerifier verify_token: {token} | Token check not implemented in TokenVerifier class"
+            f"NorthTokenVerifier is not implemented. Token check not implemented in TokenVerifier class"
         )
-        raise NotImplementedError(
-            "Token check not implemented in NorthTokenVerifier class. See NorthAuthBackend instead."
-        )
+        raise AuthenticationError("Could not verify token.")
 
     @override
     def get_middleware(self) -> list[Middleware]:

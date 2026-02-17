@@ -70,7 +70,7 @@ class LoggingOAuthProxy(OAuthProxy):
             # Look up upstream token via JTI mapping
             jti_mapping = await self._jti_mapping_store.get(key=jti)
             if not jti_mapping:
-                return None
+                raise Exception(f"No JTI mapping found for JTI: {jti}")
 
             # Get the upstream token set
             upstream_token_set = await self._upstream_token_store.get(

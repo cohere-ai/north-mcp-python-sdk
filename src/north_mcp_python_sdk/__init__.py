@@ -25,22 +25,24 @@ class NorthMCPServer(FastMCP):
         debug: bool | None = None,
         **settings: Any,
     ):
+        is_debug = debug if debug is not None else is_debug_mode()
+
+        kwargs: dict[str, Any] = {
+            **settings,
+            "auth": NorthTokenVerifier(
+                server_secret=server_secret,
+                trusted_issuers=trusted_issuers,
+                debug=is_debug,
+            ),
+        }
+
         super().__init__(
             name=name,
             instructions=instructions,
-            **settings,
-            auth=NorthTokenVerifier(
-                server_secret=server_secret,
-                trusted_issuers=trusted_issuers,
-                debug=debug if debug is not None else is_debug_mode(),
-            ),
+            **kwargs,
         )
 
-        # Auto-enable debug mode from environment variable if not explicitly set
-        if debug is None:
-            self._debug = is_debug_mode()
-        else:
-            self._debug = debug
+        self._debug = is_debug
 
         # Configure logging for debug mode
         if self._debug:
