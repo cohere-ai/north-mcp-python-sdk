@@ -99,7 +99,9 @@ async def test_x_north_headers_invalid_auth():
     _, user = auth_response
 
     assert isinstance(user, AuthenticatedUser)
-    assert user.access_token.claims["email"] is None  # email should be None when missing from token
+    assert (
+        user.access_token.claims["email"] is None
+    )  # email should be None when missing from token
 
 
 @pytest.mark.asyncio
@@ -169,7 +171,9 @@ async def test_legacy_bearer_fallback():
 
     assert isinstance(user, AuthenticatedUser)
     assert user.access_token.claims["email"] == "legacy@company.com"
-    assert user.access_token.claims["connector_access_tokens"] == {"legacy": "legacy_token"}
+    assert user.access_token.claims["connector_access_tokens"] == {
+        "legacy": "legacy_token"
+    }
 
 
 @pytest.mark.asyncio

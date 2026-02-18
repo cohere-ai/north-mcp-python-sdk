@@ -592,7 +592,7 @@ class NorthTokenVerifier(AuthProvider):
     @override
     async def verify_token(self, token: str) -> AccessToken | None:
         self.logger.debug(
-            f"NorthTokenVerifier is not implemented. Token check not implemented in TokenVerifier class"
+            "NorthTokenVerifier is not implemented. Token check not implemented in TokenVerifier class"
         )
         raise AuthenticationError("Could not verify token.")
 
