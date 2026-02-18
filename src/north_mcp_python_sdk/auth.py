@@ -322,6 +322,11 @@ class NorthAuthBackend(AuthenticationBackend):
                 "User ID token is None, using empty AccessToken.token"
             )
 
+        claims: AuthenticatedNorthUserClaims = AuthenticatedNorthUserClaims(
+            connector_access_tokens=connector_access_tokens,
+            email=email,
+        )
+
         return (
             AuthCredentials(),
             AuthenticatedUser(
@@ -329,10 +334,7 @@ class NorthAuthBackend(AuthenticationBackend):
                     token=user_id_token or "",
                     client_id=email or "",
                     scopes=[],
-                    claims={
-                        "connector_access_tokens": connector_access_tokens,
-                        "email": email,
-                    },
+                    claims=claims.model_dump(),
                 ),
             ),
         )
