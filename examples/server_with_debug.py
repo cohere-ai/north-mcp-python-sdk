@@ -1,68 +1,72 @@
-from north_mcp_python_sdk import NorthMCPServer
-from north_mcp_python_sdk.auth import get_authenticated_user
+"""
+Example: Debug Mode for Troubleshooting Authentication
 
-# Create server with debug mode enabled
+Enable debug mode to see detailed logs about:
+- Incoming request headers
+- Token parsing and validation
+- Authentication decisions
+- User context extraction
+
+Useful when troubleshooting authentication issues.
+"""
+
+from fastmcp.server.dependencies import get_access_token
+
+from north_mcp_python_sdk import NorthMCPServer
+
 mcp = NorthMCPServer("Debug Demo", port=5223, debug=True)
 
 
 @mcp.tool()
 def add(a: int, b: int) -> int:
-    """Add two numbers"""
+    """Add two numbers with debug logging."""
+    token = get_access_token()
 
-    try:
-        user = get_authenticated_user()
-        print(f"Tool called by authenticated user: {user.email}")
-        print(
-            f"Available connectors: {list(user.connector_access_tokens.keys())}"
+    if token:
+        print(f"Tool called by: {token.claims.get('email')}")
+        connectors: dict[str, str] = token.claims.get(
+            "connector_access_tokens", {}
         )
-    except Exception as e:
-        print(f"Unauthenticated user or error: {e}")
+        print(f"Available connectors: {list(connectors.keys())}")
+    else:
+        print("No access token available")
 
     result = a + b
-    print(f"Adding {a} + {b} = {result}")
+    print(f"Computed: {a} + {b} = {result}")
     return result
 
 
 @mcp.tool()
-def get_user_info() -> dict:
-    """Get information about the authenticated user"""
+def inspect_token() -> dict[str, str | int | list[str] | None]:
+    """Inspect the full access token for debugging purposes."""
+    token = get_access_token()
 
-    try:
-        user = get_authenticated_user()
-        return {
-            "email": user.email,
-            "available_connectors": list(user.connector_access_tokens.keys()),
-            "connector_count": len(user.connector_access_tokens),
-        }
-    except Exception as e:
-        return {"error": str(e), "authenticated": False}
+    if token is None:
+        return {"error": "No access token"}
 
+    connectors: dict[str, str] = token.claims.get(
+        "connector_access_tokens", {}
+    )
 
-@mcp.tool()
-def multiply(a: float, b: float) -> float:
-    """Multiply two numbers"""
-
-    try:
-        user = get_authenticated_user()
-        print(f"Multiply tool accessed by: {user.email}")
-    except Exception:
-        print("Multiply tool accessed by unauthenticated user")
-
-    result = a * b
-    print(f"Multiplying {a} * {b} = {result}")
-    return result
+    return {
+        "client_id": token.client_id,
+        "email": token.claims.get("email"),
+        "scopes": token.scopes,
+        "token_length": len(token.token) if token.token else 0,
+        "connector_count": len(connectors),
+        "connectors": list(connectors.keys()),
+    }
 
 
 if __name__ == "__main__":
     print("Starting North MCP Server in DEBUG mode...")
-    print("Debug logging will show:")
-    print("- Incoming request headers")
-    print("- Authentication token parsing details")
-    print("- User context information")
-    print("- Connector access token details")
-    print("- Any authentication errors with detailed context")
     print()
-    print("Use this mode when troubleshooting authentication issues.")
+    print("Debug logging will show:")
+    print("  - Incoming request headers")
+    print("  - Token parsing details")
+    print("  - Authentication decisions")
+    print("  - User context information")
+    print()
     print("Server running on port 5223...")
 
     mcp.run(transport="streamable-http")
