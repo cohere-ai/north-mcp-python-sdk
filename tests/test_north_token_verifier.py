@@ -120,7 +120,9 @@ class TestNorthTokenVerifierVerifyToken:
         """
         verifier = NorthTokenVerifier()
 
-        with pytest.raises(AuthenticationError, match="Could not verify token"):
+        with pytest.raises(
+            AuthenticationError, match="Could not verify token"
+        ):
             await verifier.verify_token("any-token")
 
 
@@ -133,9 +135,7 @@ class TestNorthTokenVerifierIntegration:
         email: str = "test@example.com",
     ) -> str:
         """Create a valid authentication header."""
-        user_id_token = jwt.encode(
-            payload={"email": email}, key="test-secret"
-        )
+        user_id_token = jwt.encode(payload={"email": email}, key="test-secret")
         auth_data = {
             "server_secret": server_secret,
             "user_id_token": user_id_token,

@@ -8,7 +8,10 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from north_mcp_python_sdk.auth import NorthAuthBackend, NorthAuthenticationMiddleware
+from north_mcp_python_sdk.auth import (
+    NorthAuthBackend,
+    NorthAuthenticationMiddleware,
+)
 
 
 def create_mock_backend():
@@ -68,9 +71,7 @@ class TestShouldAuthenticate:
         middleware = create_middleware()
         assert middleware._should_authenticate("/messages/session-123") is True
         assert middleware._should_authenticate("/messages/") is True
-        assert (
-            middleware._should_authenticate("/messages/abc-def-ghi") is True
-        )
+        assert middleware._should_authenticate("/messages/abc-def-ghi") is True
 
     def test_health_path_does_not_require_auth(self):
         """Test that /health path does not require authentication."""

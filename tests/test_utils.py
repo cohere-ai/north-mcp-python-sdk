@@ -5,7 +5,6 @@ Tests for utility functions in the north_mcp_python_sdk package.
 import os
 from unittest.mock import patch
 
-import pytest
 
 from north_mcp_python_sdk import is_debug_mode
 
@@ -15,7 +14,18 @@ class TestIsDebugMode:
 
     def test_debug_mode_true_values(self):
         """Test that various 'true' values enable debug mode."""
-        true_values = ["true", "True", "TRUE", "1", "yes", "Yes", "YES", "on", "On", "ON"]
+        true_values = [
+            "true",
+            "True",
+            "TRUE",
+            "1",
+            "yes",
+            "Yes",
+            "YES",
+            "on",
+            "On",
+            "ON",
+        ]
 
         for value in true_values:
             with patch.dict(os.environ, {"DEBUG": value}):

@@ -168,7 +168,9 @@ async def test_get_north_context_empty_value(test_client: httpx.AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_get_north_context_key_extraction(test_client: httpx.AsyncClient):
+async def test_get_north_context_key_extraction(
+    test_client: httpx.AsyncClient,
+):
     """Test that context keys are extracted correctly after the prefix.
 
     Note: HTTP headers are normalized to lowercase by ASGI servers.
