@@ -2,15 +2,21 @@ import base64
 import binascii
 import json
 import logging
-from typing import Any, Callable, override
+from typing import Any, Callable
+
+try:
+    from typing import override
+except ImportError:
+    from typing_extensions import override
+
 import urllib.error
 import urllib.request
 from warnings import warn
 
 try:
-    from typing_extensions import deprecated
-except ImportError:
     from warnings import deprecated
+except ImportError:
+    from typing_extensions import deprecated
 
 from fastmcp.server.auth import AccessToken, AuthProvider
 from fastmcp.server.dependencies import get_access_token, get_http_headers
