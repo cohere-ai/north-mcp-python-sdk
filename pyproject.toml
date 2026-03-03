@@ -5,7 +5,10 @@ description = "Add your description here"
 readme = "README.md"
 authors = [{ name = "Raphael Cristal", email = "raphael@cohere.com" }]
 requires-python = ">=3.11"
-dependencies = ["mcp==1.11.0", "pyjwt[crypto]>=2.10.1"]
+dependencies = [
+ "fastmcp>=2.14.5",
+ "pyjwt[crypto]>=2.10.1",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -13,9 +16,11 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
+    "asgi-lifespan>=2.1.0",
     "ipdb>=0.13.13",
     "pytest>=8.3.5",
     "pytest-asyncio>=0.26.0",
+    "ruff>=0.9.0",
     "trio>=0.30.0",
 ]
 

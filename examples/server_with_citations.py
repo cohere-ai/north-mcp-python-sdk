@@ -1,28 +1,52 @@
 """
-Example shows how to return results that are interpreted as citations in the North UI
- using the `_north_metadata` field. Simulating a web search through wikipedia.
-"""
+Example: Returning Citations with Tool Results
 
-from north_mcp_python_sdk import NorthMCPServer
+Use the `_north_metadata` field to provide citation information
+that the North UI will display alongside results.
+
+Supported metadata fields:
+- title: Document or page title
+- url: Source URL
+- author_name: Author of the content
+- last_updated: Unix timestamp of last update
+- page_number: Page number in document
+"""
 
 from datetime import datetime
 
-mcp = NorthMCPServer("Demo", port=5222)
+from north_mcp_python_sdk import NorthMCPServer
+
+mcp = NorthMCPServer("Citations Demo", port=5222)
 
 
 @mcp.tool()
-def canada_knowledge(query: str) -> list[dict]:
-    """Search for information about Canada"""
-
+def search_knowledge_base(query: str) -> list[dict[str, str | dict[str, str]]]:
+    """Search the knowledge base and return results with citations."""
     return [
         {
-            "text": "Canada is a country in North America. Its ten provinces and three territories extend from the Atlantic Ocean to the Pacific Ocean and northward into the Arctic Ocean, making it the world's second-largest country by total area, with the world's longest coastline.",
+            "text": (
+                "Python is a high-level programming language known for its "
+                "clear syntax and readability. It supports multiple programming "
+                "paradigms including procedural, object-oriented, and functional."
+            ),
             "_north_metadata": {
-                "title": "Canada - Wikipedia",
-                "url": "https://en.wikipedia.org/wiki/Canada",
-                "author_name": "Dave Smith",
-                "last_updated": str(datetime(2020, 1, 2).timestamp()),
-                "page_number": str(1),
+                "title": "Python (programming language) - Wikipedia",
+                "url": "https://en.wikipedia.org/wiki/Python_(programming_language)",
+                "author_name": "Wikipedia Contributors",
+                "last_updated": str(int(datetime(2024, 1, 15).timestamp())),
+            },
+        },
+        {
+            "text": (
+                "The Zen of Python emphasizes code readability and simplicity. "
+                "Key principles include 'Beautiful is better than ugly' and "
+                "'Simple is better than complex'."
+            ),
+            "_north_metadata": {
+                "title": "PEP 20 – The Zen of Python",
+                "url": "https://peps.python.org/pep-0020/",
+                "author_name": "Tim Peters",
+                "last_updated": str(int(datetime(2004, 8, 23).timestamp())),
             },
         },
     ]

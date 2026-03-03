@@ -1,0 +1,13 @@
+[project]
+name = "authentication-local-test"
+version = "0.1.0"
+description = "Authentication Local Test MCP Server"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastmcp>=2.14.5",
+    "north-mcp-python-sdk",
+]
+
+[tool.uv.sources]
+north-mcp-python-sdk = { path = "../../", editable = true }

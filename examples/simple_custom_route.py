@@ -1,28 +1,29 @@
-from north_mcp_python_sdk import NorthMCPServer
+"""
+Example: Minimal Custom Route for Health Checks
+
+The simplest way to add a health check endpoint for Kubernetes.
+Custom routes bypass authentication automatically.
+"""
+
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse
 
-# Create MCP server ready for Kubernetes deployment
-mcp = NorthMCPServer("MyMCPServer")
+from north_mcp_python_sdk import NorthMCPServer
+
+mcp = NorthMCPServer("Simple Server")
 
 
-# Add health check for Kubernetes liveness probe
-# Custom routes automatically bypass authentication - perfect for operational endpoints!
 @mcp.custom_route("/health", methods=["GET"])
-async def health_check(request: Request) -> PlainTextResponse:
-    """Kubernetes liveness probe endpoint"""
+async def health(_: Request) -> PlainTextResponse:
+    """Health check endpoint - no authentication required."""
     return PlainTextResponse("OK")
 
 
 @mcp.tool()
-def my_tool(message: str) -> str:
-    """Example MCP tool - accessible via authenticated /mcp endpoint"""
-    return f"Processed: {message}"
+def echo(message: str) -> str:
+    """Echo the message back - requires authentication."""
+    return f"Echo: {message}"
 
 
-# Deploy with confidence: /health works without auth, /mcp requires auth
 if __name__ == "__main__":
-    print("MCP server ready for Kubernetes deployment!")
-    print("Health check: GET /health (no auth)")
-    print("MCP protocol: POST /mcp (requires auth)")
     mcp.run()

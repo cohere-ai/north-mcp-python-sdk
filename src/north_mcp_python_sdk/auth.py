@@ -1,11 +1,28 @@
 import base64
-import contextvars
+import binascii
 import json
 import logging
-import urllib.request
+from typing import Any, Callable
 
+try:
+    from typing import override
+except ImportError:
+    from typing_extensions import override
+
+import urllib.error
+import urllib.request
+from warnings import warn
+
+try:
+    from warnings import deprecated
+except ImportError:
+    from typing_extensions import deprecated
+
+from fastmcp.server.auth import AccessToken, AuthProvider
+from fastmcp.server.dependencies import get_access_token, get_http_headers
 import jwt
 from jwt import PyJWKClient
+from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
 from pydantic import BaseModel, Field, ValidationError
 from starlette.authentication import (
     AuthCredentials,
@@ -13,6 +30,7 @@ from starlette.authentication import (
     AuthenticationError,
     BaseUser,
 )
+from starlette.middleware import Middleware
 from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.requests import HTTPConnection
 from starlette.responses import JSONResponse
@@ -26,6 +44,9 @@ class AuthHeaderTokens(BaseModel):
 
 
 class AuthenticatedNorthUser(BaseUser):
+    connector_access_tokens: dict[str, str]
+    email: str | None
+
     def __init__(
         self,
         connector_access_tokens: dict[str, str],
@@ -33,6 +54,54 @@ class AuthenticatedNorthUser(BaseUser):
     ):
         self.connector_access_tokens = connector_access_tokens
         self.email = email
+
+
+class AuthenticatedNorthUserClaims(BaseModel):
+    connector_access_tokens: dict[str, str]
+    email: str | None
+
+
+@deprecated("Use get_access_token to fetch authenticated user context.")
+def get_authenticated_user() -> AuthenticatedNorthUser:
+    access_token = get_access_token()
+
+    if access_token is None:
+        raise Exception(
+            "Access token not found in context. Cannot construct AuthenticatedNorthUser."
+        )
+
+    claims = access_token.claims
+
+    try:
+        claims = AuthenticatedNorthUserClaims.model_validate(claims)
+    except ValidationError as e:
+        raise Exception(f"Failed to validate claims: {e}") from e
+
+    return AuthenticatedNorthUser(claims.connector_access_tokens, claims.email)
+
+
+def get_north_context() -> dict[str, str]:
+    """
+    Get the North context from the current request.
+
+    Returns a dictionary of context values extracted from request headers
+    prefixed with `X-North-Context-*`. For example, a header
+    `X-North-Context-AAA: BBB` would result in `{"AAA": "BBB"}`.
+
+    Returns:
+        dict[str, str]: A dictionary mapping context keys to their values.
+    """
+    headers = get_http_headers(include_all=True)
+
+    context: dict[str, str] = {}
+    prefix = "x-north-context-"
+
+    for header_name, header_value in headers.items():
+        if header_name.lower().startswith(prefix):
+            key = header_name[len(prefix) :]
+            context[key] = header_value
+
+    return context
 
 
 class NorthAuthenticationMiddleware(AuthenticationMiddleware):
@@ -54,18 +123,24 @@ class NorthAuthenticationMiddleware(AuthenticationMiddleware):
     No configuration needed - this behavior follows MCP best practices.
     """
 
+    protected_paths: list[str]
+    debug: bool
+    logger: logging.Logger
+
     def __init__(
         self,
         app: ASGIApp,
         backend: AuthenticationBackend,
-        on_error,
+        on_error: Callable[
+            [HTTPConnection, AuthenticationError], JSONResponse
+        ],
         protected_paths: list[str] | None = None,
-        debug: bool = False,
+        debug: bool | None = None,
     ):
         super().__init__(app, backend, on_error)
         # Default protected paths - only MCP protocol routes require auth
         self.protected_paths = protected_paths or ["/mcp", "/sse"]
-        self.debug = debug
+        self.debug = debug if debug is not None else False
         self.logger = logging.getLogger("NorthMCP.Auth")
         if debug:
             self.logger.setLevel(logging.DEBUG)
@@ -87,6 +162,7 @@ class NorthAuthenticationMiddleware(AuthenticationMiddleware):
 
         return False
 
+    @override
     async def __call__(self, scope: Scope, receive: Receive, send: Send):
         if scope["type"] == "lifespan":
             return await self.app(scope, receive, send)
@@ -96,7 +172,7 @@ class NorthAuthenticationMiddleware(AuthenticationMiddleware):
         if not self._should_authenticate(path):
             self.logger.debug(
                 "Path %s is a custom route (likely operational endpoint like health check), "
-                "bypassing authentication as intended for k8s/orchestration use",
+                + "bypassing authentication as intended for k8s/orchestration use",
                 path,
             )
             # For non-protected paths, create a minimal unauthenticated user
@@ -112,78 +188,8 @@ class NorthAuthenticationMiddleware(AuthenticationMiddleware):
         return await super().__call__(scope, receive, send)
 
 
-auth_context_var = contextvars.ContextVar[AuthenticatedNorthUser | None](
-    "north_auth_context", default=None
-)
-
-
-def on_auth_error(
-    request: HTTPConnection, exc: AuthenticationError
-) -> JSONResponse:
+def on_auth_error(_: HTTPConnection, exc: AuthenticationError) -> JSONResponse:
     return JSONResponse({"error": str(exc)}, status_code=401)
-
-
-def get_authenticated_user() -> AuthenticatedNorthUser:
-    user = auth_context_var.get()
-    if not user:
-        raise Exception("user not found in context")
-
-    return user
-
-
-class AuthContextMiddleware:
-    """
-    Middleware that extracts the authenticated user from the request
-    and sets it in a contextvar for easy access throughout the request lifecycle.
-
-    This middleware should be added after the AuthenticationMiddleware in the
-    middleware stack to ensure that the user is properly authenticated before
-    being stored in the context.
-    """
-
-    def __init__(self, app: ASGIApp, debug: bool = False):
-        self.app = app
-        self.debug = debug
-        self.logger = logging.getLogger("NorthMCP.AuthContext")
-        if debug:
-            self.logger.setLevel(logging.DEBUG)
-
-    async def __call__(self, scope: Scope, receive: Receive, send: Send):
-        if scope["type"] == "lifespan":
-            return await self.app(scope, receive, send)
-
-        user = scope.get("user")
-
-        # For custom routes that don't require auth, user will be None
-        if user is None:
-            self.logger.debug(
-                "Custom route accessed without authentication (operational endpoint)"
-            )
-            token = auth_context_var.set(None)
-            try:
-                await self.app(scope, receive, send)
-            finally:
-                auth_context_var.reset(token)
-            return
-
-        if not isinstance(user, AuthenticatedNorthUser):
-            self.logger.debug(
-                "Authentication failed: user not found in context. User type: %s",
-                type(user),
-            )
-            raise AuthenticationError("user not found in context")
-
-        self.logger.debug(
-            "Setting authenticated user in context: email=%s, connectors=%s",
-            user.email,
-            list(user.connector_access_tokens.keys()),
-        )
-
-        token = auth_context_var.set(user)
-        try:
-            await self.app(scope, receive, send)
-        finally:
-            auth_context_var.reset(token)
 
 
 class NorthAuthBackend(AuthenticationBackend):
@@ -193,18 +199,25 @@ class NorthAuthBackend(AuthenticationBackend):
     2. Legacy Authorization Bearer header (backwards compatibility)
     """
 
+    _server_secret: str | None
+    _trusted_issuers: list[str] | None
+    debug: bool
+    logger: logging.Logger
+
     def __init__(
         self,
         server_secret: str | None = None,
         trusted_issuers: list[str] | None = None,
+        logger: logging.Logger | None = None,
         debug: bool = False,
     ):
         self._server_secret = server_secret
         self._trusted_issuers = trusted_issuers
         self.debug = debug
-        self.logger = logging.getLogger("NorthMCP.AuthBackend")
+        self.logger = logger or logging.getLogger("NorthMCP.AuthBackend")
         if debug:
             self.logger.setLevel(logging.DEBUG)
+        self.logger.debug("NorthAuthBackend initialized")
 
     def _has_x_north_headers(self, conn: HTTPConnection) -> bool:
         """Check if any X-North headers are present."""
@@ -219,21 +232,50 @@ class NorthAuthBackend(AuthenticationBackend):
 
     def _parse_connector_tokens(self, header_value: str) -> dict[str, str]:
         """Parse Base64 URL-safe encoded JSON connector tokens."""
+        if not header_value:
+            return {}
+
+        # Add padding if needed for Base64 decoding (correctly handles len % 4 == 0)
+        padding = (-len(header_value)) % 4
+        padded = header_value + ("=" * padding)
+
         try:
-            # Add padding if needed for Base64 decoding
-            padded = header_value + "=" * (4 - len(header_value) % 4)
-            decoded_json = base64.urlsafe_b64decode(padded).decode()
-            tokens = json.loads(decoded_json)
-            if not isinstance(tokens, dict):
-                raise ValueError("Connector tokens must be a JSON object")
-            return tokens
-        except Exception as e:
+            decoded_bytes = base64.urlsafe_b64decode(padded)
+            decoded_json = decoded_bytes.decode()
+            parsed = json.loads(decoded_json)
+        except (ValueError, json.JSONDecodeError, binascii.Error) as e:
             self.logger.warning("Failed to parse connector tokens: %s", e)
             return {}
 
+        if not isinstance(parsed, dict):
+            self.logger.warning("Connector tokens must be a JSON object")
+            return {}
+
+        # Validate and filter to ensure string keys and values only
+        tokens: dict[str, str] = {}
+        for key, value in parsed.items():
+            if isinstance(key, str) and isinstance(value, str):
+                tokens[key] = value
+            else:
+                self.logger.debug(
+                    "Skipping non-string connector token entry: %s=%s",
+                    key,
+                    value,
+                )
+
+        return tokens
+
     def _validate_server_secret(self, provided_secret: str | None) -> None:
         """Validate server secret matches expected value."""
-        if (self._server_secret and self._server_secret != provided_secret) or (not self._server_secret and provided_secret):
+        if provided_secret:
+            warn(
+                "X-North-Server-Secret is deprecated. Use X-North-ID-Token header instead.",
+                DeprecationWarning,
+            )
+
+        if (
+            self._server_secret and self._server_secret != provided_secret
+        ) or (not self._server_secret and provided_secret):
             self.logger.debug("Server secret mismatch - access denied")
             raise AuthenticationError("access denied")
 
@@ -243,7 +285,7 @@ class NorthAuthBackend(AuthenticationBackend):
             return None
 
         try:
-            decoded_token = jwt.decode(
+            decoded_token: dict[str, Any] = jwt.decode(
                 jwt=user_id_token,
                 verify=False,
                 options={"verify_signature": False},
@@ -271,11 +313,36 @@ class NorthAuthBackend(AuthenticationBackend):
             raise AuthenticationError("invalid user id token")
 
     def _create_authenticated_user(
-        self, email: str | None, connector_access_tokens: dict[str, str]
-    ) -> tuple[AuthCredentials, AuthenticatedNorthUser]:
+        self,
+        email: str | None,
+        connector_access_tokens: dict[str, str],
+        user_id_token: str | None,
+    ) -> tuple[AuthCredentials, AuthenticatedUser]:
         """Create authenticated user from validated tokens."""
-        return AuthCredentials(), AuthenticatedNorthUser(
-            connector_access_tokens=connector_access_tokens, email=email
+        if email is None:
+            self.logger.warning(
+                "Email is None, using empty AccessToken.client_id"
+            )
+        if user_id_token is None:
+            self.logger.warning(
+                "User ID token is None, using empty AccessToken.token"
+            )
+
+        claims: AuthenticatedNorthUserClaims = AuthenticatedNorthUserClaims(
+            connector_access_tokens=connector_access_tokens,
+            email=email,
+        )
+
+        return (
+            AuthCredentials(),
+            AuthenticatedUser(
+                auth_info=AccessToken(
+                    token=user_id_token or "",
+                    client_id=email or "",
+                    scopes=[],
+                    claims=claims.model_dump(),
+                ),
+            ),
         )
 
     async def _authenticate_x_north_headers(
@@ -290,7 +357,9 @@ class NorthAuthBackend(AuthenticationBackend):
         server_secret = conn.headers.get("X-North-Server-Secret")
 
         if not user_id_token and not server_secret:
-            self.logger.debug("No X-North-ID-Token or X-North-Server-Secret header present")
+            self.logger.debug(
+                "No X-North-ID-Token or X-North-Server-Secret header present"
+            )
             raise AuthenticationError("no authentication headers present")
 
         self._validate_server_secret(server_secret)
@@ -305,6 +374,10 @@ class NorthAuthBackend(AuthenticationBackend):
         # Parse connector tokens (Base64 URL-safe encoded JSON)
         connector_access_tokens = {}
         if connector_tokens_header:
+            warn(
+                "X-North-Connector-Tokens is deprecated. Use custom headers instead.",
+                DeprecationWarning,
+            )
             connector_access_tokens = self._parse_connector_tokens(
                 connector_tokens_header
             )
@@ -315,15 +388,17 @@ class NorthAuthBackend(AuthenticationBackend):
 
         self.logger.debug(
             "X-North headers parsed. Has server_secret: %s, Has user_id_token: %s, Connector count: %d",
-            server_secret is not None,
-            user_id_token is not None,
+            server_secret is not None and server_secret != "",
+            user_id_token is not None and user_id_token != "",
             len(connector_access_tokens),
         )
         self.logger.debug(
             "Available connectors: %s", list(connector_access_tokens.keys())
         )
 
-        return self._create_authenticated_user(email, connector_access_tokens)
+        return self._create_authenticated_user(
+            email, connector_access_tokens, user_id_token
+        )
 
     async def _authenticate_legacy_bearer(
         self, conn: HTTPConnection
@@ -373,9 +448,10 @@ class NorthAuthBackend(AuthenticationBackend):
 
         self.logger.debug("Legacy authentication successful")
         return self._create_authenticated_user(
-            email, tokens.connector_access_tokens
+            email, tokens.connector_access_tokens, tokens.user_id_token
         )
 
+    @override
     async def authenticate(
         self, conn: HTTPConnection
     ) -> tuple[AuthCredentials, BaseUser] | None:
@@ -392,7 +468,7 @@ class NorthAuthBackend(AuthenticationBackend):
         return await self._authenticate_legacy_bearer(conn)
 
     def _verify_token_signature(
-        self, raw_token: str, decoded_token: dict
+        self, raw_token: str, decoded_token: dict[str, Any]
     ) -> None:
         self.logger.debug(
             "Verifying user ID token signature against trusted issuers"
@@ -421,7 +497,7 @@ class NorthAuthBackend(AuthenticationBackend):
                 f"Failed to fetch OpenID configuration from {issuer}: {e}"
             )
             raise AuthenticationError(
-                f"Failed to verify token: unable to fetch issuer configuration"
+                "Failed to verify token: unable to fetch issuer configuration"
             )
 
         unverified_header = jwt.get_unverified_header(jwt=raw_token)
@@ -441,3 +517,106 @@ class NorthAuthBackend(AuthenticationBackend):
             issuer=issuer,
             options={"verify_signature": True, "verify_aud": False},
         )
+
+
+class NorthTokenVerifier(AuthProvider):
+    """
+    FastMCP AuthProvider that verifies tokens against trusted OIDC issuers.
+
+    This class integrates with FastMCP's authentication system by providing
+    middleware that validates incoming requests. It supports both X-North
+    headers and standard Authorization Bearer tokens.
+
+    Authentication is only enforced on MCP protocol paths (/mcp, /sse,
+    /messages/*). Custom routes (health checks, metrics, etc.) bypass
+    authentication automatically.
+
+    Args:
+        trusted_issuers: List of OIDC issuer URLs for cryptographic token
+            verification. If not provided, tokens are decoded but signatures
+            are not verified.
+        server_secret: Optional secret for additional request validation.
+        required_scopes: Optional list of scopes the token must contain.
+        debug: Enable debug logging for authentication flow.
+
+    Example:
+        ```python
+        from fastmcp import FastMCP
+        from fastmcp.server.dependencies import get_access_token
+        from north_mcp_python_sdk.auth import NorthTokenVerifier
+
+        # Configure North authentication
+        auth = NorthTokenVerifier(trusted_issuers=["https://auth.north.app"])
+
+        # Create the MCP server with North auth
+        mcp = FastMCP("my-mcp-server", auth=auth)
+
+        @mcp.tool()
+        def whoami() -> dict:
+            \"\"\"Get the authenticated user's access token.\"\"\"
+            token = get_access_token()
+            return token.model_dump() if token else {"error": "No access token"}
+
+        # Run with streamable HTTP
+        if __name__ == "__main__":
+            mcp.run(transport="http", host="localhost", port=8000)
+        ```
+    """
+
+    trusted_issuers: list[str] | None
+    server_secret: str | None
+    debug: bool
+    logger: logging.Logger
+    backend: NorthAuthBackend
+
+    def __init__(
+        self,
+        trusted_issuers: list[str] | None = None,
+        *,
+        server_secret: str | None = None,
+        debug: bool | None = None,
+    ):
+        super().__init__()
+        self.trusted_issuers = trusted_issuers
+        self.server_secret = server_secret
+        self.debug = debug if debug is not None else False
+        self.logger = logging.getLogger(__name__)
+        if debug:
+            self.logger.setLevel(logging.DEBUG)
+        else:
+            self.logger.setLevel(logging.INFO)
+
+        self.backend = NorthAuthBackend(
+            server_secret=self.server_secret,
+            trusted_issuers=self.trusted_issuers,
+            logger=self.logger,
+            debug=self.debug,
+        )
+
+        self.logger.info(f"NorthTokenVerifier backend: {self.backend}")
+
+    @override
+    async def verify_token(self, token: str) -> AccessToken | None:
+        self.logger.debug(
+            "NorthTokenVerifier is not implemented. Token check not implemented in TokenVerifier class"
+        )
+        raise AuthenticationError("Could not verify token.")
+
+    @override
+    def get_middleware(self) -> list[Middleware]:
+        """
+        Return middleware stack for North authentication.
+
+        Uses North's authentication middleware which:
+        - Only authenticates MCP protocol paths (/mcp, /sse, /messages/*)
+        - Allows custom routes (health checks, etc.) to bypass auth
+        - Supports both X-North headers and legacy Bearer tokens
+        """
+        return [
+            Middleware(
+                NorthAuthenticationMiddleware,
+                backend=self.backend,
+                on_error=on_auth_error,
+                debug=self.debug,
+            ),
+        ]

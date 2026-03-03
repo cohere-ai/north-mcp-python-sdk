@@ -1,0 +1,29 @@
+services:
+  dex:
+    image: dexidp/dex:latest
+    container_name: dex
+    ports:
+      - "5886:5886"
+    volumes:
+      - dex-config:/etc/dex
+    command: ["dex", "serve", "/etc/dex/config.yaml"]
+    depends_on:
+      dex-config-init:
+        condition: service_completed_successfully
+
+  dex-config-init:
+    image: alpine:latest
+    env_file:
+      - .env
+    volumes:
+      - ./config.yaml.template:/etc/dex/config.yaml.template:ro
+      - dex-config:/etc/dex
+    command:
+      - /bin/sh
+      - -c
+      - |
+        apk add --no-cache gettext
+        envsubst < /etc/dex/config.yaml.template > /etc/dex/config.yaml
+
+volumes:
+  dex-config:
