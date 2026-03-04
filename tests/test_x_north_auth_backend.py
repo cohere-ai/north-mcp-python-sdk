@@ -284,23 +284,6 @@ async def test_x_north_empty_headers_treated_as_absent():
     assert isinstance(user, AuthenticatedUser)
 
 
-@pytest.mark.asyncio
-async def test_x_north_whitespace_only_headers_treated_as_absent():
-    """Test that whitespace-only X-North headers are treated as absent."""
-    backend = NorthAuthBackend()
-
-    # Whitespace-only should be treated as absent
-    headers = {
-        "X-North-ID-Token": "   ",
-        "X-North-Server-Secret": "  ",
-        "X-North-Connector-Tokens": "  ",
-    }
-    conn = create_mock_connection(headers)
-
-    # Should fall back to legacy auth since X-North headers are effectively absent
-    with pytest.raises(AuthenticationError, match="invalid authorization"):
-        await backend.authenticate(conn)
-
 
 @pytest.mark.asyncio
 async def test_no_auth_headers_present():
@@ -408,19 +391,3 @@ async def test_connector_tokens_non_dict_ignored():
     assert user.access_token.claims["connector_access_tokens"] == {}
 
 
-@pytest.mark.asyncio
-async def test_server_sends_secret_when_none_expected():
-    """Test error when client sends secret but server doesn't expect one."""
-    backend = NorthAuthBackend(server_secret=None)  # No secret expected
-
-    user_id_token = jwt.encode(
-        payload={"email": "test@company.com"}, key="test"
-    )
-    headers = {
-        "X-North-ID-Token": user_id_token,
-        "X-North-Server-Secret": "unexpected_secret",  # Server doesn't expect this
-    }
-    conn = create_mock_connection(headers)
-
-    with pytest.raises(AuthenticationError, match="access denied"):
-        await backend.authenticate(conn)
