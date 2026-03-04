@@ -382,7 +382,9 @@ class NorthAuthBackend(AuthenticationBackend):
             email = user_email_header
 
         self.logger.debug("X-North authentication successful")
-        return self._create_authenticated_user(email, connector_access_tokens, user_id_token)
+        return self._create_authenticated_user(
+            email, connector_access_tokens, user_id_token
+        )
 
     async def _authenticate_legacy_bearer(
         self, conn: HTTPConnection
