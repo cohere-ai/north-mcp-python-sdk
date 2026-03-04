@@ -706,7 +706,7 @@ wheels = [
 
 [[package]]
 name = "north-mcp-python-sdk"
-version = "0.2.5"
+version = "0.3.1"
 source = { editable = "../../" }
 dependencies = [
     { name = "fastmcp" },
@@ -715,7 +715,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "fastmcp", specifier = ">=2.14.5" },
+    { name = "fastmcp", specifier = ">=2.14.5,<3" },
     { name = "pyjwt", extras = ["crypto"], specifier = ">=2.10.1" },
 ]
 
