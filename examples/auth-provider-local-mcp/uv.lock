@@ -706,7 +706,7 @@ wheels = [
 
 [[package]]
 name = "north-mcp-python-sdk"
-version = "0.2.5"
+version = "0.2.4"
 source = { editable = "../../" }
 dependencies = [
     { name = "fastmcp" },
