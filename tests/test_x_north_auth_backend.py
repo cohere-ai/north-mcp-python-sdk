@@ -284,7 +284,6 @@ async def test_x_north_empty_headers_treated_as_absent():
     assert isinstance(user, AuthenticatedUser)
 
 
-
 @pytest.mark.asyncio
 async def test_no_auth_headers_present():
     """Test error when no authentication headers are provided at all."""
@@ -389,5 +388,3 @@ async def test_connector_tokens_non_dict_ignored():
 
     # Non-dict values result in empty connector tokens
     assert user.access_token.claims["connector_access_tokens"] == {}
-
-
