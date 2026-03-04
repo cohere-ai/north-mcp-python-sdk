@@ -1,12 +1,12 @@
 [project]
 name = "north-mcp-python-sdk"
-version = "0.2.5"
+version = "0.3.1"
 description = "Add your description here"
 readme = "README.md"
 authors = [{ name = "Raphael Cristal", email = "raphael@cohere.com" }]
 requires-python = ">=3.11"
 dependencies = [
- "fastmcp>=2.14.5",
+ "fastmcp>=2.14.5,<3",
  "pyjwt[crypto]>=2.10.1",
 ]
 
