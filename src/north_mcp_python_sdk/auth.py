@@ -265,6 +265,9 @@ class NorthAuthBackend(AuthenticationBackend):
 
         return tokens
 
+    def _auth_is_configured(self) -> bool:
+        return bool(self._server_secret or self._trusted_issuers)
+
     def _validate_server_secret(self, provided_secret: str | None) -> None:
         """Validate server secret matches expected value."""
         if provided_secret:
@@ -460,6 +463,16 @@ class NorthAuthBackend(AuthenticationBackend):
         headers_debug = {k: v for k, v in conn.headers.items()}
         self.logger.debug("Request headers: %s", headers_debug)
 
+        if not self._auth_is_configured():
+            self.logger.debug(
+                "No server secret or trusted token configuration present; skipping authentication"
+            )
+            return self._create_authenticated_user(
+                email=None,
+                connector_access_tokens={},
+                user_id_token=None,
+            )
+
         # Check for X-North headers first (preferred)
         if self._has_x_north_headers(conn):
             return await self._authenticate_x_north_headers(conn)
@@ -470,16 +483,25 @@ class NorthAuthBackend(AuthenticationBackend):
     def _verify_token_signature(
         self, raw_token: str, decoded_token: dict[str, Any]
     ) -> None:
+        issuer = decoded_token.get("iss")
+
+        if self._trusted_issuers and issuer in self._trusted_issuers:
+            self._verify_token_signature_from_issuer(
+                raw_token=raw_token,
+                issuer=issuer,
+            )
+            return
+
+        if not issuer:
+            raise AuthenticationError("Token missing issuer")
+        raise AuthenticationError(f"Untrusted issuer: {issuer}")
+
+    def _verify_token_signature_from_issuer(
+        self, *, raw_token: str, issuer: str
+    ) -> None:
         self.logger.debug(
             "Verifying user ID token signature against trusted issuers"
         )
-        issuer = decoded_token.get("iss")
-        if not issuer:
-            raise AuthenticationError("Token missing issuer")
-
-        if issuer not in self._trusted_issuers:
-            raise AuthenticationError(f"Untrusted issuer: {issuer}")
-
         openid_config_req = urllib.request.Request(
             url=issuer.rstrip("/") + "/.well-known/openid-configuration"
         )
