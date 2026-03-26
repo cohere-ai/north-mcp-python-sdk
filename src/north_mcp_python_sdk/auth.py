@@ -77,6 +77,15 @@ def get_authenticated_user() -> AuthenticatedNorthUser:
     except ValidationError as e:
         raise Exception(f"Failed to validate claims: {e}") from e
 
+    if (
+        access_token.token == ""
+        and claims.email is None
+        and not claims.connector_access_tokens
+    ):
+        raise Exception(
+            "Access token not found in context. Cannot construct AuthenticatedNorthUser."
+        )
+
     return AuthenticatedNorthUser(claims.connector_access_tokens, claims.email)
 
 
@@ -464,8 +473,20 @@ class NorthAuthBackend(AuthenticationBackend):
         self.logger.debug("Request headers: %s", headers_debug)
 
         if not self._auth_is_configured():
+            if self._has_x_north_headers(conn):
+                self.logger.debug(
+                    "No auth configured, but X-North headers are present; parsing request context without enforcing authentication"
+                )
+                return await self._authenticate_x_north_headers(conn)
+
+            if conn.headers.get("Authorization"):
+                self.logger.debug(
+                    "No auth configured, but Authorization header is present; parsing legacy request context without enforcing authentication"
+                )
+                return await self._authenticate_legacy_bearer(conn)
+
             self.logger.debug(
-                "No server secret or trusted token configuration present; skipping authentication"
+                "No server secret or trusted issuer configuration present and no auth headers provided; skipping authentication"
             )
             return self._create_authenticated_user(
                 email=None,
