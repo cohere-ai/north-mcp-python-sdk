@@ -349,6 +349,8 @@ class NorthAuthBackend(AuthenticationBackend):
             AuthCredentials(),
             AuthenticatedUser(
                 auth_info=AccessToken(
+                    # FastMCP exposes auth context through AccessToken, so we currently
+                    # lean on it as the carrier for North request context as well.
                     token=user_id_token or "",
                     client_id=email or "",
                     scopes=[],
