@@ -77,6 +77,15 @@ def get_authenticated_user() -> AuthenticatedNorthUser:
     except ValidationError as e:
         raise Exception(f"Failed to validate claims: {e}") from e
 
+    if (
+        access_token.token == ""
+        and claims.email is None
+        and not claims.connector_access_tokens
+    ):
+        raise Exception(
+            "Access token not found in context. Cannot construct AuthenticatedNorthUser."
+        )
+
     return AuthenticatedNorthUser(claims.connector_access_tokens, claims.email)
 
 
@@ -265,6 +274,9 @@ class NorthAuthBackend(AuthenticationBackend):
 
         return tokens
 
+    def _auth_is_configured(self) -> bool:
+        return bool(self._server_secret or self._trusted_issuers)
+
     def _validate_server_secret(self, provided_secret: str | None) -> None:
         """Validate server secret matches expected value."""
         if provided_secret:
@@ -337,6 +349,8 @@ class NorthAuthBackend(AuthenticationBackend):
             AuthCredentials(),
             AuthenticatedUser(
                 auth_info=AccessToken(
+                    # FastMCP exposes auth context through AccessToken, so we currently
+                    # lean on it as the carrier for North request context as well.
                     token=user_id_token or "",
                     client_id=email or "",
                     scopes=[],
@@ -460,6 +474,28 @@ class NorthAuthBackend(AuthenticationBackend):
         headers_debug = {k: v for k, v in conn.headers.items()}
         self.logger.debug("Request headers: %s", headers_debug)
 
+        if not self._auth_is_configured():
+            if self._has_x_north_headers(conn):
+                self.logger.debug(
+                    "No auth configured, but X-North headers are present; parsing request context without enforcing authentication"
+                )
+                return await self._authenticate_x_north_headers(conn)
+
+            if conn.headers.get("Authorization"):
+                self.logger.debug(
+                    "No auth configured, but Authorization header is present; parsing legacy request context without enforcing authentication"
+                )
+                return await self._authenticate_legacy_bearer(conn)
+
+            self.logger.debug(
+                "No server secret or trusted issuer configuration present and no auth headers provided; skipping authentication"
+            )
+            return self._create_authenticated_user(
+                email=None,
+                connector_access_tokens={},
+                user_id_token=None,
+            )
+
         # Check for X-North headers first (preferred)
         if self._has_x_north_headers(conn):
             return await self._authenticate_x_north_headers(conn)
@@ -470,16 +506,25 @@ class NorthAuthBackend(AuthenticationBackend):
     def _verify_token_signature(
         self, raw_token: str, decoded_token: dict[str, Any]
     ) -> None:
+        issuer = decoded_token.get("iss")
+
+        if self._trusted_issuers and issuer in self._trusted_issuers:
+            self._verify_token_signature_from_issuer(
+                raw_token=raw_token,
+                issuer=issuer,
+            )
+            return
+
+        if not issuer:
+            raise AuthenticationError("Token missing issuer")
+        raise AuthenticationError(f"Untrusted issuer: {issuer}")
+
+    def _verify_token_signature_from_issuer(
+        self, *, raw_token: str, issuer: str
+    ) -> None:
         self.logger.debug(
             "Verifying user ID token signature against trusted issuers"
         )
-        issuer = decoded_token.get("iss")
-        if not issuer:
-            raise AuthenticationError("Token missing issuer")
-
-        if issuer not in self._trusted_issuers:
-            raise AuthenticationError(f"Untrusted issuer: {issuer}")
-
         openid_config_req = urllib.request.Request(
             url=issuer.rstrip("/") + "/.well-known/openid-configuration"
         )

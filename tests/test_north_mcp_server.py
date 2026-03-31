@@ -27,9 +27,25 @@ async def test_client(app: NorthMCPServer):
             yield client
 
 
+@pytest.fixture
+def app_with_auth() -> NorthMCPServer:
+    return NorthMCPServer(server_secret="secret")
+
+
+@pytest_asyncio.fixture
+async def auth_test_client(app_with_auth: NorthMCPServer):
+    asgi_app = app_with_auth.http_app(transport="streamable-http")
+    async with LifespanManager(asgi_app) as manager:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=manager.app),
+            base_url="https://mcptest.com",
+        ) as client:
+            yield client
+
+
 @pytest.mark.asyncio
-async def test_missing_auth_header(test_client: httpx.AsyncClient):
-    result = await test_client.post(
+async def test_missing_auth_header(auth_test_client: httpx.AsyncClient):
+    result = await auth_test_client.post(
         "/mcp",
         json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
     )
@@ -38,8 +54,8 @@ async def test_missing_auth_header(test_client: httpx.AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_invalid_auth_header(test_client: httpx.AsyncClient):
-    result = await test_client.post(
+async def test_invalid_auth_header(auth_test_client: httpx.AsyncClient):
+    result = await auth_test_client.post(
         "/mcp",
         headers={"Authorization": "Bearer Invalid"},
         json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
@@ -50,9 +66,9 @@ async def test_invalid_auth_header(test_client: httpx.AsyncClient):
 
 @pytest.mark.asyncio
 async def test_missing_token_returns_unauthorized(
-    test_client: httpx.AsyncClient,
+    auth_test_client: httpx.AsyncClient,
 ):
-    result = await test_client.post(
+    result = await auth_test_client.post(
         "/mcp",
         headers={"Authorization": ""},
         json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
@@ -62,8 +78,10 @@ async def test_missing_token_returns_unauthorized(
 
 
 @pytest.mark.asyncio
-async def test_invalid_base64_auth_header(test_client: httpx.AsyncClient):
-    result = await test_client.post(
+async def test_invalid_base64_auth_header(
+    auth_test_client: httpx.AsyncClient,
+):
+    result = await auth_test_client.post(
         "/mcp",
         headers={"Authorization": "invalid_base64"},
         json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},

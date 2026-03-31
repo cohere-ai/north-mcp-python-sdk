@@ -181,8 +181,10 @@ class TestNorthTokenVerifierIntegration:
                 yield client
 
     @pytest.mark.asyncio
-    async def test_mcp_route_requires_auth(self, fastmcp_with_north_auth):
-        """Test that MCP routes require authentication."""
+    async def test_mcp_route_allows_requests_without_auth_by_default(
+        self, fastmcp_with_north_auth
+    ):
+        """Test that MCP routes do not require auth when no auth is configured."""
         response = await fastmcp_with_north_auth.post(
             "/mcp",
             json={
@@ -192,7 +194,7 @@ class TestNorthTokenVerifierIntegration:
                 "params": {},
             },
         )
-        assert response.status_code == 401
+        assert response.status_code != 401
 
     @pytest.mark.asyncio
     async def test_mcp_route_with_valid_auth(self, fastmcp_with_north_auth):
@@ -222,6 +224,22 @@ class TestNorthTokenVerifierIntegration:
         response = await fastmcp_with_secret.post(
             "/mcp",
             headers={"Authorization": auth_header},
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {},
+            },
+        )
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_server_secret_auth_requires_headers(
+        self, fastmcp_with_secret
+    ):
+        """Test that MCP routes require auth when server secret auth is configured."""
+        response = await fastmcp_with_secret.post(
+            "/mcp",
             json={
                 "jsonrpc": "2.0",
                 "id": 1,

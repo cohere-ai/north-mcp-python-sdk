@@ -297,21 +297,35 @@ async def test_x_north_whitespace_only_headers_treated_as_absent():
     }
     conn = create_mock_connection(headers)
 
-    # Should fall back to legacy auth since X-North headers are effectively absent
-    with pytest.raises(AuthenticationError, match="invalid authorization"):
-        await backend.authenticate(conn)
+    # Open auth should treat effectively-empty North headers the same as no headers.
+    auth_response = await backend.authenticate(conn)
+    if auth_response is None:
+        raise ValueError("Authentication response is None")
+    _, user = auth_response
+
+    assert isinstance(user, AuthenticatedUser)
+    assert user.access_token.token == ""
+    assert user.access_token.claims["email"] is None
+    assert user.access_token.claims["connector_access_tokens"] == {}
 
 
 @pytest.mark.asyncio
 async def test_no_auth_headers_present():
-    """Test error when no authentication headers are provided at all."""
+    """Test open auth returns empty context when no auth headers are provided."""
     backend = NorthAuthBackend()
 
     headers = {}
     conn = create_mock_connection(headers)
 
-    with pytest.raises(AuthenticationError, match="invalid authorization"):
-        await backend.authenticate(conn)
+    auth_response = await backend.authenticate(conn)
+    if auth_response is None:
+        raise ValueError("Authentication response is None")
+    _, user = auth_response
+
+    assert isinstance(user, AuthenticatedUser)
+    assert user.access_token.token == ""
+    assert user.access_token.claims["email"] is None
+    assert user.access_token.claims["connector_access_tokens"] == {}
 
 
 @pytest.mark.asyncio

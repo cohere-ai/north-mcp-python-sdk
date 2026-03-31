@@ -21,7 +21,9 @@ def create_mock_connection(headers: dict[str, str]) -> Mock:
 
 
 def create_x_north_headers_with_issuer(
-    email: str = "test@company.com", issuer: str = "https://example.okta.com"
+    email: str = "test@company.com",
+    issuer: str = "https://example.okta.com",
+    include_server_secret: bool = True,
 ) -> dict[str, str]:
     """Helper to create X-North headers with specific issuer."""
     user_id_token = jwt.encode(
@@ -36,11 +38,13 @@ def create_x_north_headers_with_issuer(
         .rstrip("=")
     )
 
-    return {
+    headers = {
         "X-North-ID-Token": user_id_token,
         "X-North-Connector-Tokens": connector_tokens_b64,
-        "X-North-Server-Secret": "server_secret",
     }
+    if include_server_secret:
+        headers["X-North-Server-Secret"] = "server_secret"
+    return headers
 
 
 @pytest.mark.asyncio
@@ -64,6 +68,56 @@ async def test_x_north_headers_without_trusted_issuers():
 
     assert isinstance(user, AuthenticatedUser)
     assert user.access_token.claims["email"] == "test@company.com"
+
+
+@pytest.mark.asyncio
+async def test_auth_without_configuration_allows_missing_headers():
+    backend = NorthAuthBackend()
+    conn = create_mock_connection({})
+
+    auth_response = await backend.authenticate(conn)
+    if auth_response is None:
+        raise ValueError("Authentication response is None")
+    _, user = auth_response
+
+    assert isinstance(user, AuthenticatedUser)
+    assert user.access_token.token == ""
+    assert user.access_token.claims["email"] is None
+
+
+@pytest.mark.asyncio
+async def test_auth_without_configuration_still_parses_x_north_headers():
+    backend = NorthAuthBackend()
+    headers = create_x_north_headers_with_issuer(
+        email="test@company.com",
+        issuer="https://untrusted.example.com",
+        include_server_secret=False,
+    )
+    conn = create_mock_connection(headers)
+
+    auth_response = await backend.authenticate(conn)
+    if auth_response is None:
+        raise ValueError("Authentication response is None")
+    _, user = auth_response
+
+    assert isinstance(user, AuthenticatedUser)
+    assert user.access_token.claims["email"] == "test@company.com"
+    assert user.access_token.claims["connector_access_tokens"] == {
+        "google": "token123"
+    }
+
+
+@pytest.mark.asyncio
+async def test_trusted_issuers_require_auth_headers():
+    backend = NorthAuthBackend(
+        trusted_issuers=["https://example.okta.com"],
+    )
+    conn = create_mock_connection({})
+
+    with pytest.raises(
+        AuthenticationError, match="invalid authorization header"
+    ):
+        await backend.authenticate(conn)
 
 
 @pytest.mark.asyncio
