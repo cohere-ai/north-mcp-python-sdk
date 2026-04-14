@@ -33,11 +33,6 @@ def create_test_server() -> NorthMCPServer:
         else:
             return f"Unauthenticated tool call: {message}"
 
-    @mcp.custom_route("/health", methods=["GET"])
-    async def health_check(request: Request) -> PlainTextResponse:
-        """Health check - should work without auth."""
-        return PlainTextResponse("OK")
-
     @mcp.custom_route("/status", methods=["GET"])
     async def status_check(request: Request) -> JSONResponse:
         """Status check - should work without auth."""

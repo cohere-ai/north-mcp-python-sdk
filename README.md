@@ -21,6 +21,17 @@ This repository provides code to enable your server to use authentication with N
 * You can access the user's OAuth token to interact with third-party services on their behalf.
 * You can access the user's identity (from the identity provider used with North).
 * **Debug mode** for detailed authentication logging and troubleshooting.
+* **Built-in health check** endpoint for Kubernetes liveness probes (enabled by default).
+
+## Health Check
+
+`NorthMCPServer` includes a built-in `/health` endpoint that responds to `GET` requests with a `200 OK` plain-text response. This is useful for Kubernetes liveness/readiness probes and load balancer health checks. The endpoint bypasses authentication, so no tokens are needed.
+
+It is enabled by default. To disable it:
+
+```python
+mcp = NorthMCPServer(name="Demo", health_check=False)
+```
 
 ## Examples
 

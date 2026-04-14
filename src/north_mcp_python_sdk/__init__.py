@@ -3,6 +3,8 @@ import os
 from typing import Any
 
 from fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import PlainTextResponse
 
 from .auth import NorthTokenVerifier, get_north_context
 
@@ -23,6 +25,7 @@ class NorthMCPServer(FastMCP):
         server_secret: str | None = None,
         trusted_issuers: list[str] | None = None,
         debug: bool | None = None,
+        health_check: bool = True,
         **settings: Any,
     ):
         is_debug = debug if debug is not None else is_debug_mode()
@@ -55,6 +58,14 @@ class NorthMCPServer(FastMCP):
         else:
             self._logger = logging.getLogger(f"NorthMCP.{name or 'Server'}")
             self._logger.setLevel(logging.INFO)
+
+        if health_check:
+            self._register_health_check()
+
+    def _register_health_check(self) -> None:
+        @self.custom_route("/health", methods=["GET"])
+        async def health(_: Request) -> PlainTextResponse:
+            return PlainTextResponse("OK")
 
 
 # Convenience exports

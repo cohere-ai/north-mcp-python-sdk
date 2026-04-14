@@ -16,6 +16,11 @@ def app() -> NorthMCPServer:
     return NorthMCPServer()
 
 
+@pytest.fixture
+def app_no_health() -> NorthMCPServer:
+    return NorthMCPServer(health_check=False)
+
+
 @pytest_asyncio.fixture
 async def test_client(app: NorthMCPServer):
     asgi_app = app.http_app(transport="streamable-http")
@@ -211,3 +216,29 @@ async def test_valid_auth_header_no_bearer(
     )
 
     assert result.status_code != 401
+
+
+@pytest_asyncio.fixture
+async def no_health_test_client(app_no_health: NorthMCPServer):
+    asgi_app = app_no_health.http_app(transport="streamable-http")
+    async with LifespanManager(asgi_app) as manager:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=manager.app),
+            base_url="https://mcptest.com",
+        ) as client:
+            yield client
+
+
+@pytest.mark.asyncio
+async def test_health_check_enabled_by_default(test_client: httpx.AsyncClient):
+    """Built-in /health endpoint is available when health_check defaults to True."""
+    result = await test_client.get("/health")
+    assert result.status_code == 200
+    assert result.text == "OK"
+
+
+@pytest.mark.asyncio
+async def test_health_check_disabled(no_health_test_client: httpx.AsyncClient):
+    """/health endpoint returns 404 when health_check=False."""
+    result = await no_health_test_client.get("/health")
+    assert result.status_code == 404
