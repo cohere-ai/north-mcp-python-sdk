@@ -20,12 +20,6 @@ from north_mcp_python_sdk import NorthMCPServer
 mcp = NorthMCPServer("K8s Ready Server", port=5222)
 
 
-@mcp.custom_route("/health", methods=["GET"])
-async def health_check(request: Request) -> PlainTextResponse:
-    """Kubernetes liveness probe - no auth required."""
-    return PlainTextResponse("OK")
-
-
 @mcp.custom_route("/ready", methods=["GET"])
 async def readiness_check(request: Request) -> JSONResponse:
     """Kubernetes readiness probe - no auth required."""
@@ -58,7 +52,6 @@ if __name__ == "__main__":
     print("MCP Server with Kubernetes endpoints")
     print()
     print("Public endpoints (no auth):")
-    print("  GET /health  - Liveness probe")
     print("  GET /ready   - Readiness probe")
     print("  GET /metrics - Prometheus metrics")
     print()
