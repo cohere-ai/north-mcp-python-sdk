@@ -17,7 +17,7 @@ from starlette.responses import JSONResponse, PlainTextResponse
 
 from north_mcp_python_sdk import NorthMCPServer
 
-mcp = NorthMCPServer("K8s Ready Server", port=5222)
+mcp = NorthMCPServer("K8s Ready Server")
 
 
 @mcp.custom_route("/ready", methods=["GET"])
@@ -58,4 +58,4 @@ if __name__ == "__main__":
     print("Protected endpoints (auth required):")
     print("  POST /mcp    - MCP protocol")
 
-    mcp.run(transport="streamable-http")
+    mcp.run(transport="streamable-http", port=5222)

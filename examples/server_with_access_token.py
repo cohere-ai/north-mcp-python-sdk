@@ -17,7 +17,7 @@ from fastmcp.server.dependencies import get_access_token
 
 from north_mcp_python_sdk import NorthMCPServer
 
-mcp = NorthMCPServer("Access Token Demo", port=5222)
+mcp = NorthMCPServer("Access Token Demo")
 
 
 @mcp.tool()
@@ -101,4 +101,4 @@ if __name__ == "__main__":
     print("  - email: User's email address")
     print("  - connector_access_tokens: OAuth tokens for external services")
 
-    mcp.run(transport="streamable-http")
+    mcp.run(transport="streamable-http", port=5222)

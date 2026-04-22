@@ -9,7 +9,7 @@ from fastmcp.server.dependencies import get_access_token
 
 from north_mcp_python_sdk import NorthMCPServer
 
-mcp = NorthMCPServer("Auth Demo", port=5222)
+mcp = NorthMCPServer("Auth Demo")
 
 
 @mcp.tool()
@@ -22,4 +22,4 @@ def add(a: int, b: int) -> int:
 
 
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http")
+    mcp.run(transport="streamable-http", port=5222)

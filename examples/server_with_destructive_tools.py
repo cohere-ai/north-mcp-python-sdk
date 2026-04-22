@@ -14,7 +14,7 @@ from mcp.types import ToolAnnotations
 
 from north_mcp_python_sdk import NorthMCPServer
 
-mcp = NorthMCPServer("Annotated Tools Demo", port=5222)
+mcp = NorthMCPServer("Annotated Tools Demo")
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=True))
@@ -36,4 +36,4 @@ def fetch_external_data(url: str) -> str:
 
 
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http")
+    mcp.run(transport="streamable-http", port=5222)

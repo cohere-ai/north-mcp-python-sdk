@@ -12,7 +12,7 @@ from fastmcp.server.dependencies import get_access_token
 
 from north_mcp_python_sdk import NorthMCPServer, get_north_context
 
-mcp = NorthMCPServer("Context Demo", port=5222)
+mcp = NorthMCPServer("Context Demo")
 
 
 @mcp.tool()
@@ -49,4 +49,4 @@ if __name__ == "__main__":
     print("  X-North-Context-Tenant-ID: your-tenant-id")
     print("  X-North-Context-Feature-Flags: flag1,flag2")
 
-    mcp.run(transport="streamable-http")
+    mcp.run(transport="streamable-http", port=5222)
