@@ -22,7 +22,6 @@ TRUSTED_ISSUERS = [
 
 mcp = NorthMCPServer(
     "Verified Auth Demo",
-    port=5224,
     trusted_issuers=TRUSTED_ISSUERS,
     debug=True,
 )
@@ -72,4 +71,4 @@ if __name__ == "__main__":
     print("Only tokens signed by these identity providers will be accepted.")
     print("Server running on port 5224...")
 
-    mcp.run(transport="streamable-http")
+    mcp.run(transport="streamable-http", port=5224)

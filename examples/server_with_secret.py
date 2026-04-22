@@ -23,7 +23,6 @@ SERVER_SECRET = os.getenv("MCP_SERVER_SECRET", "development-secret")
 
 mcp = NorthMCPServer(
     "Secret Protected Server",
-    port=5222,
     server_secret=SERVER_SECRET,
 )
 
@@ -52,4 +51,4 @@ if __name__ == "__main__":
     print("Generate a test token with:")
     print(f'  python create_bearer_token.py --server-secret "{SERVER_SECRET}"')
 
-    mcp.run(transport="streamable-http")
+    mcp.run(transport="streamable-http", port=5222)

@@ -14,7 +14,7 @@ from fastmcp.server.dependencies import get_access_token
 
 from north_mcp_python_sdk import NorthMCPServer
 
-mcp = NorthMCPServer("Debug Demo", port=5223, debug=True)
+mcp = NorthMCPServer("Debug Demo", debug=True)
 
 
 @mcp.tool()
@@ -69,4 +69,4 @@ if __name__ == "__main__":
     print()
     print("Server running on port 5223...")
 
-    mcp.run(transport="streamable-http")
+    mcp.run(transport="streamable-http", port=5223)
