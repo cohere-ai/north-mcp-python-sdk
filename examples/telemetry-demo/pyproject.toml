@@ -1,0 +1,13 @@
+[project]
+name = "north-mcp-telemetry-demo"
+version = "0.1.0"
+description = "NorthMCPServer example with FastMCP OpenTelemetry custom spans"
+requires-python = ">=3.11"
+dependencies = [
+    "north-mcp-python-sdk",
+    "opentelemetry-sdk>=1.27.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.27.0",
+]
+
+[tool.uv.sources]
+north-mcp-python-sdk = { path = "../../", editable = true }
