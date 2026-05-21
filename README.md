@@ -21,6 +21,7 @@ This repository provides code to enable your server to use authentication with N
 * You can access the user's OAuth token to interact with third-party services on their behalf.
 * You can access the user's identity (from the identity provider used with North).
 * **Debug mode** for detailed authentication logging and troubleshooting.
+* **OpenTelemetry helpers** for custom spans, log/trace correlation, and privacy-aware error recording (built on [FastMCP telemetry](https://gofastmcp.com/servers/telemetry)).
 * **Built-in health check** endpoint for Kubernetes liveness probes (enabled by default).
 
 ## Health Check
@@ -37,7 +38,7 @@ mcp = NorthMCPServer(name="Demo", health_check=False)
 
 This repository contains example servers that you can use as a quickstart. You can find them in the [examples directory](https://github.com/cohere-ai/north-mcp-python-sdk/tree/main/examples).
 
-There are 2 examples, one that uses the auth to get the user making the tool call, and the other one shows how to send the right metadata so that the North UI can display the tool call results correctly.
+Examples cover authentication, tool metadata for the North UI, debug mode, and OpenTelemetry (`examples/telemetry-demo/`).
 
 
 ## Authentication
@@ -109,11 +110,88 @@ When debug mode is enabled, you'll see detailed logs including:
 
 ### Debug Mode Examples
 
-See the - `examples/server_with_debug.py` for a debug mode for an example:
+See `examples/server_with_debug.py` for a runnable example.
 
 ### Security Note
 
 Debug mode logs sensitive information including request headers and token metadata. **Never enable debug mode in production environments** as it may expose authentication details in logs.
+
+## OpenTelemetry
+
+FastMCP 3 emits a span for each tool call when a `TracerProvider` is configured. The North SDK adds helpers on top of that; it does **not** install exporters or configure where traces are sent—that stays in your server.
+
+### What the SDK provides
+
+| Helper | Purpose |
+|--------|---------|
+| `traced_span` | Custom spans nested under FastMCP tool spans, with redacted exception details unless verbose mode is on |
+| `get_tracer` | Re-export of FastMCP’s tracer (`fastmcp` instrumentation name) |
+| `TraceContextFormatter` | Appends `trace_id` / `span_id` to log lines on the `NorthMCP.{name}` logger when a span is active |
+| `_verbose` on `NorthMCPServer` | Controls whether your code should pass sensitive data into spans (see below) |
+
+### Dependencies
+
+- **`opentelemetry-api`** is required by FastMCP and imported by this SDK’s telemetry module.
+- **`opentelemetry-sdk`**, OTLP exporters, and collectors are **not** SDK dependencies. Add them in your server’s `pyproject.toml` if you want exported traces (see `examples/telemetry-demo/`).
+
+Servers run fine **without** configuring a `TracerProvider`; traces are no-ops until you add one.
+
+### Setup
+
+1. **Register a `TracerProvider` and exporters in `main` before importing `NorthMCPServer`** (FastMCP reads the global provider at import time). Use your own setup or standard OTel env vars (`OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, etc.).
+2. **Construct the server** — trace/span IDs are added automatically to `NorthMCP.*` log lines when a span is active.
+3. **Use `traced_span` in tools** for custom child spans.
+
+```python
+def configure_tracing() -> None:
+    # Install opentelemetry-sdk + exporters in your server project.
+    # See examples/telemetry-demo/main.py for a minimal OTLP gRPC example.
+    ...
+
+def main() -> None:
+    configure_tracing()
+
+    from north_mcp_python_sdk import NorthMCPServer, traced_span
+
+    mcp = NorthMCPServer("My Server")
+
+    @mcp.tool()
+    async def search(query: str) -> str:
+        with traced_span(
+            "search.run",
+            verbose=mcp._verbose,
+            attributes={"query.length": len(query)},
+        ):
+            mcp._logger.info("running search")
+            ...
+```
+
+Full walkthrough: [`examples/telemetry-demo/main.py`](examples/telemetry-demo/main.py).
+
+For broader auto-instrumentation (HTTP, logging, etc.), use the [`opentelemetry-instrument`](https://opentelemetry.io/docs/zero-code/python/) CLI per [FastMCP telemetry docs](https://gofastmcp.com/servers/telemetry).
+
+### Verbose mode (sensitive span data)
+
+Separate from **debug** (log level). **Verbose** controls whether `traced_span` may record exception messages and other sensitive attributes in spans.
+
+#### Environment variable
+
+```bash
+export VERBOSE=true
+python your_server.py
+```
+
+#### Constructor parameter
+
+```python
+mcp = NorthMCPServer(name="Demo", verbose=True)
+```
+
+In tools, pass `verbose=mcp._verbose` into `traced_span`. When verbose is off (default), span errors use the exception type name only.
+
+### Running without exported telemetry
+
+Omit `configure_tracing()` (or any `TracerProvider` setup). The MCP server behaves normally; you simply will not export traces until you add a provider and exporters later.
 
 ## Local Development without North
 

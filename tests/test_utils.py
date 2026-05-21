@@ -6,7 +6,7 @@ import os
 from unittest.mock import patch
 
 
-from north_mcp_python_sdk import is_debug_mode
+from north_mcp_python_sdk import is_debug_mode, is_verbose_mode
 
 
 class TestIsDebugMode:
@@ -77,6 +77,48 @@ class TestIsDebugMode:
             assert is_debug_mode() is False
 
 
+class TestIsVerboseMode:
+    """Tests for is_verbose_mode() function."""
+
+    def test_verbose_mode_true_values(self):
+        for value in ("true", "1", "yes", "on"):
+            with patch.dict(os.environ, {"VERBOSE": value}):
+                assert is_verbose_mode() is True
+
+    def test_verbose_mode_false_when_unset(self):
+        env = os.environ.copy()
+        env.pop("VERBOSE", None)
+        with patch.dict(os.environ, env, clear=True):
+            assert is_verbose_mode() is False
+
+
+class TestNorthMCPServerVerboseMode:
+    """Tests for NorthMCPServer verbose mode initialization."""
+
+    def test_server_verbose_mode_from_env(self):
+        from north_mcp_python_sdk import NorthMCPServer
+
+        with patch.dict(os.environ, {"VERBOSE": "true"}):
+            server = NorthMCPServer(name="test")
+            assert server._verbose is True
+
+    def test_server_verbose_mode_explicit_override(self):
+        from north_mcp_python_sdk import NorthMCPServer
+
+        with patch.dict(os.environ, {"VERBOSE": "true"}):
+            server = NorthMCPServer(name="test", verbose=False)
+            assert server._verbose is False
+
+    def test_server_verbose_mode_default(self):
+        from north_mcp_python_sdk import NorthMCPServer
+
+        env = os.environ.copy()
+        env.pop("VERBOSE", None)
+        with patch.dict(os.environ, env, clear=True):
+            server = NorthMCPServer(name="test")
+            assert server._verbose is False
+
+
 class TestNorthMCPServerDebugMode:
     """Tests for NorthMCPServer debug mode initialization."""
 
@@ -125,8 +167,12 @@ class TestPackageExports:
         expected_exports = [
             "NorthMCPServer",
             "NorthTokenVerifier",
-            "is_debug_mode",
+            "TraceContextFormatter",
             "get_north_context",
+            "get_tracer",
+            "is_debug_mode",
+            "is_verbose_mode",
+            "traced_span",
         ]
 
         assert set(__all__) == set(expected_exports)
@@ -154,6 +200,12 @@ class TestPackageExports:
         from north_mcp_python_sdk import is_debug_mode
 
         assert is_debug_mode is not None
+
+    def test_is_verbose_mode_import(self):
+        """Test that is_verbose_mode can be imported."""
+        from north_mcp_python_sdk import is_verbose_mode
+
+        assert is_verbose_mode is not None
 
 
 class TestAuthModuleExports:

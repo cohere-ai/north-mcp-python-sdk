@@ -1,20 +1,23 @@
 """
-North MCP server demonstrating FastMCP OpenTelemetry integration.
+North MCP server demonstrating OpenTelemetry with the SDK.
 
-FastMCP emits a span for each tool call. This example adds a parent custom span
-with two sequential child spans inside the tool.
+Setup (three steps):
 
-TracerProvider must be registered before importing NorthMCPServer (which imports
-FastMCP). See: https://gofastmcp.com/servers/telemetry
+1. Register a ``TracerProvider`` with exporters *before* importing
+   ``NorthMCPServer`` (this file's ``_configure_tracing()``).
+2. Construct ``NorthMCPServer`` — log lines on ``NorthMCP.*`` include trace/span
+   IDs when a span is active (``TraceContextFormatter``).
+3. Use ``traced_span`` inside tools for custom spans nested under FastMCP's
+   per-tool spans.
 
 Run from this directory::
 
     uv sync
     uv run python main.py
 
-Point ``OTEL_EXPORTER_OTLP_ENDPOINT`` (default ``http://localhost:4317``) at an
-OTLP collector or desktop viewer, or use ``opentelemetry-instrument`` per the
-FastMCP telemetry docs.
+Set ``OTEL_EXPORTER_OTLP_ENDPOINT`` (default ``http://localhost:4317``) to send
+traces to a collector. For broader auto-instrumentation, see FastMCP telemetry:
+https://gofastmcp.com/servers/telemetry
 """
 
 from __future__ import annotations
@@ -51,27 +54,26 @@ def _configure_tracing() -> None:
 def main() -> None:
     _configure_tracing()
 
-    from fastmcp.telemetry import get_tracer
-
-    from north_mcp_python_sdk import NorthMCPServer
+    from north_mcp_python_sdk import NorthMCPServer, traced_span
 
     mcp = NorthMCPServer("Telemetry Demo")
 
     @mcp.tool()
     async def demo_traced_pipeline(payload: str) -> str:
         """Run a small pipeline: one custom span, then two sequential sub-spans."""
-        tracer = get_tracer()
-
-        with tracer.start_as_current_span("demo.pipeline") as pipeline:
-            pipeline.set_attribute("payload.length", len(payload))
-
-            with tracer.start_as_current_span("demo.pipeline.validate"):
+        with traced_span(
+            "demo.pipeline",
+            attributes={"payload.length": len(payload)},
+        ):
+            with traced_span("demo.pipeline.validate"):
                 await asyncio.sleep(0.03)
                 normalized = payload.strip().lower()
 
-            with tracer.start_as_current_span("demo.pipeline.format") as fmt:
-                fmt.set_attribute("normalized.length", len(normalized))
-                await asyncio.sleep(0.03)
+            with traced_span(
+                "demo.pipeline.format",
+                attributes={"normalized.length": len(normalized)},
+            ):
+                await asyncio.sleep(0.05)
                 result = f"ok:{normalized}"
 
         return result
