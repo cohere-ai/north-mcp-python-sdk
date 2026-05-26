@@ -6,7 +6,7 @@ import os
 from unittest.mock import patch
 
 
-from north_mcp_python_sdk import is_debug_mode, is_verbose_mode
+from north_mcp_python_sdk import is_debug_mode
 
 
 class TestIsDebugMode:
@@ -77,46 +77,31 @@ class TestIsDebugMode:
             assert is_debug_mode() is False
 
 
-class TestIsVerboseMode:
-    """Tests for is_verbose_mode() function."""
+class TestNorthMCPServerTelemetryConfig:
+    """Tests for NorthMCPServer telemetry config initialization."""
 
-    def test_verbose_mode_true_values(self):
-        for value in ("true", "1", "yes", "on"):
-            with patch.dict(os.environ, {"VERBOSE": value}):
-                assert is_verbose_mode() is True
-
-    def test_verbose_mode_false_when_unset(self):
-        env = os.environ.copy()
-        env.pop("VERBOSE", None)
-        with patch.dict(os.environ, env, clear=True):
-            assert is_verbose_mode() is False
-
-
-class TestNorthMCPServerVerboseMode:
-    """Tests for NorthMCPServer verbose mode initialization."""
-
-    def test_server_verbose_mode_from_env(self):
+    def test_server_telemetry_disabled_by_default(self):
         from north_mcp_python_sdk import NorthMCPServer
 
-        with patch.dict(os.environ, {"VERBOSE": "true"}):
-            server = NorthMCPServer(name="test")
-            assert server._verbose is True
+        server = NorthMCPServer(name="test")
+        assert server.telemetry.record_sensitive_data is False
+        assert server.telemetry.log_trace_context is False
 
-    def test_server_verbose_mode_explicit_override(self):
-        from north_mcp_python_sdk import NorthMCPServer
+    def test_server_telemetry_opt_in_uses_dataclass_defaults(self):
+        from north_mcp_python_sdk import NorthMCPServer, TelemetryConfig
 
-        with patch.dict(os.environ, {"VERBOSE": "true"}):
-            server = NorthMCPServer(name="test", verbose=False)
-            assert server._verbose is False
+        server = NorthMCPServer(name="test", telemetry=TelemetryConfig())
+        assert server.telemetry.record_sensitive_data is False
+        assert server.telemetry.log_trace_context is True
 
-    def test_server_verbose_mode_default(self):
-        from north_mcp_python_sdk import NorthMCPServer
+    def test_server_telemetry_explicit_opt_in(self):
+        from north_mcp_python_sdk import NorthMCPServer, TelemetryConfig
 
-        env = os.environ.copy()
-        env.pop("VERBOSE", None)
-        with patch.dict(os.environ, env, clear=True):
-            server = NorthMCPServer(name="test")
-            assert server._verbose is False
+        server = NorthMCPServer(
+            name="test",
+            telemetry=TelemetryConfig(record_sensitive_data=True),
+        )
+        assert server.telemetry.record_sensitive_data is True
 
 
 class TestNorthMCPServerDebugMode:
@@ -165,13 +150,15 @@ class TestPackageExports:
         from north_mcp_python_sdk import __all__
 
         expected_exports = [
+            "Depends",
             "NorthMCPServer",
             "NorthTokenVerifier",
+            "TelemetryConfig",
             "TraceContextFormatter",
             "get_north_context",
+            "get_telemetry_config",
             "get_tracer",
             "is_debug_mode",
-            "is_verbose_mode",
             "traced_span",
         ]
 
@@ -200,12 +187,6 @@ class TestPackageExports:
         from north_mcp_python_sdk import is_debug_mode
 
         assert is_debug_mode is not None
-
-    def test_is_verbose_mode_import(self):
-        """Test that is_verbose_mode can be imported."""
-        from north_mcp_python_sdk import is_verbose_mode
-
-        assert is_verbose_mode is not None
 
 
 class TestAuthModuleExports:

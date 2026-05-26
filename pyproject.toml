@@ -40,6 +40,20 @@ line-ending = "auto"
 docstring-code-format = true
 docstring-code-line-length = "dynamic"
 
+# Allow FastMCP-style DI defaults like `x: T = Depends(get_x)`.
+# Without this, ruff's B008 ("function call in default argument") flags
+# every Depends() call. FastAPI projects use the same pattern.
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = [
+    "north_mcp_python_sdk.Depends",
+    "fastmcp.dependencies.Depends",
+]
+
+# Silence basedpyright/Pylance's `reportCallInDefaultInitializer` for the
+# same reason — Depends(...) is a sentinel that FastMCP swaps before the
+# tool body runs, not a live call.
+[tool.basedpyright]
+reportCallInDefaultInitializer = "none"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

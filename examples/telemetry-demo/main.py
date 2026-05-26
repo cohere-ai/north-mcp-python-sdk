@@ -5,10 +5,15 @@ Setup (three steps):
 
 1. Register a ``TracerProvider`` with exporters *before* importing
    ``NorthMCPServer`` (this file's ``_configure_tracing()``).
-2. Construct ``NorthMCPServer`` — log lines on ``NorthMCP.*`` include trace/span
-   IDs when a span is active (``TraceContextFormatter``).
-3. Use ``traced_span`` inside tools for custom spans nested under FastMCP's
-   per-tool spans.
+2. Construct ``NorthMCPServer`` with a :class:`TelemetryConfig`. Passing
+   any config is the opt-in signal for the SDK's telemetry hooks; leaving
+   ``telemetry=None`` leaves the server logger untouched. When
+   ``log_trace_context`` is enabled (the default for an opted-in config)
+   the server logger annotates log lines with the current ``trace_id``
+   and ``span_id``.
+3. Use ``mcp.telemetry.traced_span`` inside tools for custom spans nested
+   under FastMCP's per-tool spans. The span automatically honours
+   ``record_sensitive_data``.
 
 Run from this directory::
 
@@ -54,22 +59,50 @@ def _configure_tracing() -> None:
 def main() -> None:
     _configure_tracing()
 
-    from north_mcp_python_sdk import NorthMCPServer, traced_span
+    from north_mcp_python_sdk import (
+        Depends,
+        NorthMCPServer,
+        TelemetryConfig,
+        get_telemetry_config,
+    )
 
-    mcp = NorthMCPServer("Telemetry Demo")
+    mcp = NorthMCPServer(
+        "Telemetry Demo",
+        telemetry=TelemetryConfig(
+            record_sensitive_data=False,
+            log_trace_context=True,
+        ),
+    )
 
     @mcp.tool()
-    async def demo_traced_pipeline(payload: str) -> str:
-        """Run a small pipeline: one custom span, then two sequential sub-spans."""
-        with traced_span(
+    async def demo_traced_pipeline(
+        payload: str,
+        telemetry: TelemetryConfig = Depends(get_telemetry_config),
+    ) -> str:
+        """Run a small pipeline: one custom span, then two sequential sub-spans.
+
+        Demonstrates the FastAPI-style DI pattern: declaring
+        ``telemetry: TelemetryConfig = Depends(get_telemetry_config)`` lets
+        FastMCP inject the active server's config as a parameter, so tools
+        do not need a reference to ``mcp`` at all.
+
+        For tools that prefer not to expose the config in their signature,
+        ``get_telemetry_config()`` and ``traced_span`` can be imported and
+        called directly — they resolve the same active config via
+        FastMCP's ``get_server`` dependency.
+        """
+        with telemetry.traced_span(
             "demo.pipeline",
             attributes={"payload.length": len(payload)},
-        ):
-            with traced_span("demo.pipeline.validate"):
+        ) as span:
+            if telemetry.record_sensitive_data:
+                span.add_event("demo.payload", {"payload": payload})
+
+            with telemetry.traced_span("demo.pipeline.validate"):
                 await asyncio.sleep(0.03)
                 normalized = payload.strip().lower()
 
-            with traced_span(
+            with telemetry.traced_span(
                 "demo.pipeline.format",
                 attributes={"normalized.length": len(normalized)},
             ):
