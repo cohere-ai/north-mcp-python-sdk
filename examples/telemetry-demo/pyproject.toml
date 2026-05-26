@@ -1,0 +1,28 @@
+[project]
+name = "north-mcp-telemetry-demo"
+version = "0.1.0"
+description = "NorthMCPServer example with FastMCP OpenTelemetry custom spans"
+requires-python = ">=3.11"
+dependencies = [
+    "north-mcp-python-sdk",
+    "opentelemetry-sdk>=1.27.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.27.0",
+]
+
+[tool.uv.sources]
+north-mcp-python-sdk = { path = "../../", editable = true }
+
+# Allow FastMCP-style DI defaults like `x: T = Depends(get_x)`.
+# Without this, ruff's B008 ("function call in default argument") flags
+# every Depends() call. FastAPI projects use the same pattern.
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = [
+    "north_mcp_python_sdk.Depends",
+    "fastmcp.dependencies.Depends",
+]
+
+# Silence basedpyright/Pylance's `reportCallInDefaultInitializer` for the
+# same reason — Depends(...) is a sentinel that FastMCP swaps before the
+# tool body runs, not a live call.
+[tool.basedpyright]
+reportCallInDefaultInitializer = "none"

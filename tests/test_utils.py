@@ -77,6 +77,33 @@ class TestIsDebugMode:
             assert is_debug_mode() is False
 
 
+class TestNorthMCPServerTelemetryConfig:
+    """Tests for NorthMCPServer telemetry config initialization."""
+
+    def test_server_telemetry_disabled_by_default(self):
+        from north_mcp_python_sdk import NorthMCPServer
+
+        server = NorthMCPServer(name="test")
+        assert server.telemetry.record_sensitive_data is False
+        assert server.telemetry.log_trace_context is False
+
+    def test_server_telemetry_opt_in_uses_dataclass_defaults(self):
+        from north_mcp_python_sdk import NorthMCPServer, TelemetryConfig
+
+        server = NorthMCPServer(name="test", telemetry=TelemetryConfig())
+        assert server.telemetry.record_sensitive_data is False
+        assert server.telemetry.log_trace_context is True
+
+    def test_server_telemetry_explicit_opt_in(self):
+        from north_mcp_python_sdk import NorthMCPServer, TelemetryConfig
+
+        server = NorthMCPServer(
+            name="test",
+            telemetry=TelemetryConfig(record_sensitive_data=True),
+        )
+        assert server.telemetry.record_sensitive_data is True
+
+
 class TestNorthMCPServerDebugMode:
     """Tests for NorthMCPServer debug mode initialization."""
 
@@ -123,10 +150,16 @@ class TestPackageExports:
         from north_mcp_python_sdk import __all__
 
         expected_exports = [
+            "Depends",
             "NorthMCPServer",
             "NorthTokenVerifier",
-            "is_debug_mode",
+            "TelemetryConfig",
+            "TraceContextFormatter",
             "get_north_context",
+            "get_telemetry_config",
+            "get_tracer",
+            "is_debug_mode",
+            "traced_span",
         ]
 
         assert set(__all__) == set(expected_exports)
