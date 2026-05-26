@@ -118,7 +118,7 @@ Debug mode logs sensitive information including request headers and token metada
 
 ## OpenTelemetry
 
-FastMCP 3 emits a span for each tool call when a `TracerProvider` is configured. The North SDK adds helpers on top of that; it does **not** install exporters or configure where traces are sent—that stays in your server.
+FastMCP 3 emits a span for each tool call when a `TracerProvider` is configured. The North SDK adds helpers on top of that; it does **not** install exporters or configure where traces are sent — `opentelemetry-sdk` and OTLP exporters are not bundled dependencies. Servers run fine without a `TracerProvider`; traces become no-ops until you add one.
 
 ### What the SDK provides
 
@@ -128,65 +128,15 @@ FastMCP 3 emits a span for each tool call when a `TracerProvider` is configured.
 | `mcp.telemetry.traced_span` | Custom spans nested under FastMCP tool spans, driven by the server's `TelemetryConfig`. Use this when you have `mcp` in scope. |
 | `traced_span` (module-level) | Same context manager, but auto-resolves the active server's config via `fastmcp.server.dependencies.get_server`. Use this from tool bodies that don't hold an `mcp` reference. |
 | `get_telemetry_config()` | Returns the active `NorthMCPServer`'s `TelemetryConfig` (or a private "off" config when there's no active North server). Lets tools branch on `record_sensitive_data` without an `mcp` reference. |
-| `Depends` | Re-export of FastMCP's `Depends` factory (from `uncalled_for`). Combine with `get_telemetry_config` for FastAPI-style parameter injection: `telemetry: TelemetryConfig = Depends(get_telemetry_config)`. |
+| `Depends` | Re-export of FastMCP's `Depends` factory. Combine with `get_telemetry_config` for FastAPI-style parameter injection: `telemetry: TelemetryConfig = Depends(get_telemetry_config)`. |
 | `get_tracer` | Re-export of FastMCP's tracer (`fastmcp` instrumentation name) |
 | `TraceContextFormatter` | Appends `trace_id` / `span_id` to log lines on the `NorthMCP.{name}` logger when a span is active |
-
-### Dependencies
-
-- **`opentelemetry-api`** is required by FastMCP and imported by this SDK's telemetry module.
-- **`opentelemetry-sdk`**, OTLP exporters, and collectors are **not** SDK dependencies. Add them in your server's `pyproject.toml` if you want exported traces (see `examples/telemetry-demo/`).
-
-Servers run fine **without** configuring a `TracerProvider`; traces are no-ops until you add one.
 
 ### Setup
 
 1. **Register a `TracerProvider` and exporters in `main` before importing `NorthMCPServer`** (FastMCP reads the global provider at import time). Use your own setup or standard OTel env vars (`OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, etc.).
-2. **Construct the server with a `TelemetryConfig`** — this is the opt-in signal. When `log_trace_context` is enabled (the default for an opted-in config), trace/span IDs are appended automatically to `NorthMCP.*` log lines.
-3. **Open custom spans inside tools.** Three equivalent patterns, pick the one that fits how the tool is written:
-
-   - **Server in scope:** `mcp.telemetry.traced_span(...)` and read `mcp.telemetry.record_sensitive_data` directly. Best when `mcp` is already a closure variable.
-   - **Import only:** `from north_mcp_python_sdk import traced_span, get_telemetry_config`. Both look up the active server through `fastmcp.server.dependencies.get_server` and honour its `TelemetryConfig` automatically — no `mcp` reference needed.
-   - **FastAPI-style parameter injection:** declare the config as a tool parameter with `Depends(get_telemetry_config)`. FastMCP's DI machinery (via `uncalled_for`) injects the active config before the tool body runs:
-
-     ```python
-     from north_mcp_python_sdk import Depends, TelemetryConfig, get_telemetry_config
-
-     @mcp.tool()
-     async def search(
-         query: str,
-         telemetry: TelemetryConfig = Depends(get_telemetry_config),
-     ) -> list[dict]:
-         with telemetry.traced_span("search.run") as span:
-             if telemetry.record_sensitive_data:
-                 span.add_event("search.query", {"query": query})
-             ...
-     ```
-
-     Note: the default-value form (`= Depends(...)`) is the only one FastMCP currently recognises through its tool dispatcher — `Annotated[T, Depends(...)]` without a default is treated as a required tool input by FastMCP's Pydantic validator. The default-value form is the canonical FastAPI/FastMCP DI pattern, but strict static checkers (Pyright/Pylance/basedpyright, ruff's `B008`) will flag it as a function call in a default. Whitelist `Depends` in your project config — the same way FastAPI projects do:
-
-     ```toml
-     # pyproject.toml — ruff
-     [tool.ruff.lint.flake8-bugbear]
-     extend-immutable-calls = [
-         "north_mcp_python_sdk.Depends",
-         "fastmcp.dependencies.Depends",
-     ]
-     ```
-
-     ```toml
-     # pyproject.toml — basedpyright / Pylance
-     [tool.basedpyright]
-     reportCallInDefaultInitializer = "none"
-     ```
-
-     If you prefer per-line suppression instead of a project-wide rule:
-
-     ```python
-     telemetry: TelemetryConfig = Depends(get_telemetry_config)  # noqa: B008
-     ```
-
-If you do not pass `telemetry=...`, the server uses a private "off" config: both fields are `False`, no formatter is attached to the `NorthMCP.*` logger, and `traced_span` will not record exception details. FastMCP's own tool/resource/prompt spans are unaffected — they still appear whenever a `TracerProvider` is configured.
+2. **Pass a `TelemetryConfig` to `NorthMCPServer`** — this is the opt-in signal. When `log_trace_context` is enabled (the default for an opted-in config), trace/span IDs are appended automatically to `NorthMCP.*` log lines.
+3. **Inject the config into tools with `Depends(get_telemetry_config)`** and call `telemetry.traced_span(...)` for custom spans. See the helper table for `mcp.telemetry` and bare-import alternatives.
 
 ```python
 def configure_tracing() -> None:
@@ -198,10 +148,10 @@ def main() -> None:
     configure_tracing()
 
     from north_mcp_python_sdk import (
+        Depends,
         NorthMCPServer,
         TelemetryConfig,
         get_telemetry_config,
-        traced_span,
     )
 
     mcp = NorthMCPServer(
@@ -213,17 +163,19 @@ def main() -> None:
     )
 
     @mcp.tool()
-    async def search(query: str) -> list[dict]:
-        # No reference to `mcp` needed: traced_span resolves the active
-        # server's TelemetryConfig via FastMCP's get_server dependency,
-        # and get_telemetry_config() exposes the same config for branching
-        # on record_sensitive_data.
-        config = get_telemetry_config()
-        with traced_span(
+    async def search(
+        query: str,
+        telemetry: TelemetryConfig = Depends(get_telemetry_config),
+    ) -> list[dict]:
+        # FastMCP injects the active server's TelemetryConfig as `telemetry`
+        # before the tool body runs. No reference to `mcp` is needed, and
+        # `telemetry.traced_span` honours `record_sensitive_data` for
+        # exception details.
+        with telemetry.traced_span(
             "search.provider_call",
             attributes={"search.query_length": len(query)},
         ) as span:
-            if config.record_sensitive_data:
+            if telemetry.record_sensitive_data:
                 span.add_event("search.query", {"query": query})
 
             results = await provider.search(query)
@@ -231,20 +183,18 @@ def main() -> None:
             return results
 ```
 
-Full walkthrough: [`examples/telemetry-demo/main.py`](examples/telemetry-demo/main.py).
+`Depends(...)` in a default trips ruff's `B008` and basedpyright's `reportCallInDefaultInitializer`. Whitelist `Depends` as configured in this repo's `pyproject.toml`; this is the same approach FastAPI projects use.
 
-For broader auto-instrumentation (HTTP, logging, etc.), use the [`opentelemetry-instrument`](https://opentelemetry.io/docs/zero-code/python/) CLI per [FastMCP telemetry docs](https://gofastmcp.com/servers/telemetry).
+Full walkthrough: [`examples/telemetry-demo/main.py`](examples/telemetry-demo/main.py). For broader auto-instrumentation (HTTP, logging, etc.), use the [`opentelemetry-instrument`](https://opentelemetry.io/docs/zero-code/python/) CLI per [FastMCP telemetry docs](https://gofastmcp.com/servers/telemetry).
 
 ### `TelemetryConfig` options
-
-Constructing `TelemetryConfig` is the opt-in signal. The dataclass defaults represent that opted-in baseline:
 
 | Option | Default (when opted in) | Description |
 |--------|-------------------------|-------------|
 | `record_sensitive_data` | `False` | When `True`, `traced_span` records full exception messages on spans and tools may attach sensitive payloads (query text, IDs, etc.) as span events. Off by default for safety; opt in explicitly in code only. |
 | `log_trace_context` | `True` | When `True`, the SDK attaches a formatter that appends `trace_id` / `span_id` to log lines on the `NorthMCP.*` logger while a span is active. |
 
-If you leave `telemetry=None` (or pass `TelemetryConfig.disabled()`), **both** fields are `False` and the SDK leaves the server logger alone — neither flag has an environment-variable fallback.
+If you leave `telemetry=None`, the SDK uses an internal "telemetry not opted in" config: both flags `False`, no formatter is attached to the `NorthMCP.*` logger, and `traced_span` records only the exception type name on error. Neither flag has an environment-variable fallback. FastMCP's own tool/resource/prompt spans are unaffected — they still appear whenever a `TracerProvider` is configured.
 
 ```python
 mcp = NorthMCPServer(
@@ -252,12 +202,6 @@ mcp = NorthMCPServer(
     telemetry=TelemetryConfig(record_sensitive_data=True),
 )
 ```
-
-When `record_sensitive_data` is off, span errors use the exception type name only.
-
-### Running without exported telemetry
-
-Omit `configure_tracing()` (or any `TracerProvider` setup). The MCP server behaves normally; you simply will not export traces until you add a provider and exporters later.
 
 ## Local Development without North
 
