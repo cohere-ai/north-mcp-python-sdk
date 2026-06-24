@@ -36,7 +36,9 @@ def protected_operation() -> dict[str, str | None]:
 if __name__ == "__main__":
     print("Starting deprecated server_secret compatibility example...")
     print()
-    print("server_secret is deprecated. Prefer server_with_trusted_issuers.py.")
+    print(
+        "server_secret is deprecated. Prefer server_with_trusted_issuers.py."
+    )
     print()
 
     mcp.run(transport="streamable-http", port=5222)

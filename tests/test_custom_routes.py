@@ -206,7 +206,9 @@ async def test_messages_routes_require_auth(sse_test_client):
 async def test_custom_routes_with_optional_auth(test_client):
     """Test that custom routes can optionally use auth info."""
     # Test auth-info endpoint with auth
-    response = await test_client.get("/auth-info", headers=create_auth_headers())
+    response = await test_client.get(
+        "/auth-info", headers=create_auth_headers()
+    )
     assert response.status_code == 200
     response.json()
     # Note: will be False because we don't have a valid user_id_token in our test
