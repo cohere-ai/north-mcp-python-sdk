@@ -21,7 +21,7 @@ def create_mock_connection(headers: dict[str, str]) -> Mock:
 
 
 def create_x_north_headers(email: str = "test@company.com") -> dict[str, str]:
-    """Helper to create valid X-North headers."""
+    """Helper to create valid X-North headers without deprecated server secrets."""
     user_id_token = jwt.encode(payload={"email": email}, key="does-not-matter")
     connector_tokens_json = json.dumps(
         {"google": "token123", "slack": "token456"}
@@ -35,14 +35,13 @@ def create_x_north_headers(email: str = "test@company.com") -> dict[str, str]:
     return {
         "X-North-ID-Token": user_id_token,
         "X-North-Connector-Tokens": connector_tokens_b64,
-        "X-North-Server-Secret": "server_secret",
     }
 
 
 @pytest.mark.asyncio
 async def test_x_north_headers_success():
-    """Test successful X-North authentication with all headers."""
-    backend = NorthAuthBackend(server_secret="server_secret")
+    """Test successful X-North authentication with ID token headers."""
+    backend = NorthAuthBackend()
     headers = create_x_north_headers("test@company.com")
     conn = create_mock_connection(headers)
 
@@ -61,12 +60,12 @@ async def test_x_north_headers_success():
 
 @pytest.mark.asyncio
 async def test_x_north_headers_invalid_auth():
-    """Test X-North authentication failures (wrong secret, bad tokens, missing email)."""
-    backend = NorthAuthBackend(server_secret="server_secret")
+    """Test X-North authentication failures (deprecated secret, bad tokens, missing email)."""
+    backend = NorthAuthBackend()
 
-    # Wrong server secret
+    # Deprecated server secret should be rejected when the server does not expect one.
     headers = create_x_north_headers()
-    headers["X-North-Server-Secret"] = "wrong_secret"
+    headers["X-North-Server-Secret"] = "unexpected_secret"
     conn = create_mock_connection(headers)
 
     with pytest.raises(AuthenticationError, match="access denied"):
@@ -109,14 +108,14 @@ async def test_x_north_takes_precedence_over_bearer():
     """Test X-North headers take precedence over Authorization Bearer."""
     from north_mcp_python_sdk.auth import AuthHeaderTokens
 
-    backend = NorthAuthBackend(server_secret="server_secret")
+    backend = NorthAuthBackend()
 
     # Create conflicting tokens
     legacy_token = jwt.encode(
         payload={"email": "legacy@company.com"}, key="test"
     )
     legacy_header = AuthHeaderTokens(
-        server_secret="server_secret",
+        server_secret=None,
         user_id_token=legacy_token,
         connector_access_tokens={"legacy": "legacy_token"},
     )
@@ -147,13 +146,13 @@ async def test_legacy_bearer_fallback():
     """Test legacy Authorization Bearer works when no X-North headers."""
     from north_mcp_python_sdk.auth import AuthHeaderTokens
 
-    backend = NorthAuthBackend(server_secret="server_secret")
+    backend = NorthAuthBackend()
 
     user_token = jwt.encode(
         payload={"email": "legacy@company.com"}, key="test"
     )
     legacy_header = AuthHeaderTokens(
-        server_secret="server_secret",
+        server_secret=None,
         user_id_token=user_token,
         connector_access_tokens={"legacy": "legacy_token"},
     )
@@ -178,10 +177,14 @@ async def test_legacy_bearer_fallback():
 
 @pytest.mark.asyncio
 async def test_minimal_x_north_headers():
-    """Test X-North with minimal headers (just server secret)."""
-    backend = NorthAuthBackend(server_secret="server_secret")
+    """Test X-North with minimal supported headers."""
+    backend = NorthAuthBackend()
 
-    headers = {"X-North-Server-Secret": "server_secret"}
+    headers = {
+        "X-North-ID-Token": jwt.encode(
+            payload={"email": "minimal@company.com"}, key="test"
+        )
+    }
     conn = create_mock_connection(headers)
 
     auth_response = await backend.authenticate(conn)
@@ -190,20 +193,19 @@ async def test_minimal_x_north_headers():
     _, user = auth_response
 
     assert isinstance(user, AuthenticatedUser)
-    assert user.access_token.claims["email"] is None
+    assert user.access_token.claims["email"] == "minimal@company.com"
     assert user.access_token.claims["connector_access_tokens"] == {}
 
 
 @pytest.mark.asyncio
 async def test_x_north_user_email_header_fallback():
     """Test X-North-User-Email header as fallback when no email in ID token."""
-    backend = NorthAuthBackend(server_secret="server_secret")
+    backend = NorthAuthBackend()
 
     # ID token without email claim
     user_id_token = jwt.encode(payload={"name": "Test User"}, key="test")
     headers = {
         "X-North-ID-Token": user_id_token,
-        "X-North-Server-Secret": "server_secret",
         "X-North-User-Email": "fallback@company.com",
     }
     conn = create_mock_connection(headers)
@@ -220,7 +222,7 @@ async def test_x_north_user_email_header_fallback():
 @pytest.mark.asyncio
 async def test_x_north_user_email_header_not_override_token_email():
     """Test that ID token email takes precedence over X-North-User-Email."""
-    backend = NorthAuthBackend(server_secret="server_secret")
+    backend = NorthAuthBackend()
 
     # ID token with email claim
     user_id_token = jwt.encode(
@@ -228,7 +230,6 @@ async def test_x_north_user_email_header_not_override_token_email():
     )
     headers = {
         "X-North-ID-Token": user_id_token,
-        "X-North-Server-Secret": "server_secret",
         "X-North-User-Email": "header@company.com",
     }
     conn = create_mock_connection(headers)

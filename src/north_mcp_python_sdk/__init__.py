@@ -1,6 +1,7 @@
 import logging
 import os
 from typing import Any
+from warnings import warn
 
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
@@ -54,6 +55,11 @@ class NorthMCPServer(FastMCP):
         telemetry_config = (
             telemetry if telemetry is not None else _TELEMETRY_DISABLED
         )
+        if server_secret:
+            warn(
+                "server_secret is deprecated. Use trusted_issuers for new North MCP servers.",
+                DeprecationWarning,
+            )
 
         kwargs: dict[str, Any] = {
             **settings,

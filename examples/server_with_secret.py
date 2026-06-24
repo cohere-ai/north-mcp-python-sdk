@@ -1,16 +1,7 @@
-"""
-Example: Server Secret for Additional Security
+"""Deprecated compatibility example for legacy server_secret deployments.
 
-Configure a server_secret to add an additional layer of authentication.
-Requests must include the correct secret in addition to user credentials.
-
-This is useful for:
-- Restricting which North deployments can access this server
-- Adding defense-in-depth beyond user authentication
-- Environment-specific access control
-
-Note: The server_secret is deprecated in favor of trusted_issuers
-for new deployments. Use trusted_issuers for cryptographic verification.
+Do not use this for new MCP servers. Use `examples/server_with_trusted_issuers.py`
+so the server validates `X-North-ID-Token` signatures from trusted issuers.
 """
 
 import os
@@ -43,12 +34,9 @@ def protected_operation() -> dict[str, str | None]:
 
 
 if __name__ == "__main__":
-    print("Starting MCP Server with server secret protection...")
+    print("Starting deprecated server_secret compatibility example...")
     print()
-    print("Requests must include the server secret in the auth payload.")
-    print("Set MCP_SERVER_SECRET environment variable to configure.")
+    print("server_secret is deprecated. Prefer server_with_trusted_issuers.py.")
     print()
-    print("Generate a test token with:")
-    print(f'  python create_bearer_token.py --server-secret "{SERVER_SECRET}"')
 
     mcp.run(transport="streamable-http", port=5222)

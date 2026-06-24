@@ -48,7 +48,6 @@ NORTH_TRUSTED_ISSUERS = (
     if os.getenv("NORTH_TRUSTED_ISSUERS")
     else None
 )
-NORTH_SERVER_SECRET = os.getenv("NORTH_SERVER_SECRET")
 
 
 # ============================================================================
@@ -124,7 +123,6 @@ def build_north_verifier() -> NorthTokenVerifier:
     """Build a NorthTokenVerifier for North platform authentication."""
     return NorthTokenVerifier(
         trusted_issuers=NORTH_TRUSTED_ISSUERS,
-        server_secret=NORTH_SERVER_SECRET,
         debug=True,
     )
 

@@ -23,7 +23,6 @@ def create_mock_connection(headers: dict[str, str]) -> Mock:
 def create_x_north_headers_with_issuer(
     email: str = "test@company.com",
     issuer: str = "https://example.okta.com",
-    include_server_secret: bool = True,
 ) -> dict[str, str]:
     """Helper to create X-North headers with specific issuer."""
     user_id_token = jwt.encode(
@@ -42,8 +41,6 @@ def create_x_north_headers_with_issuer(
         "X-North-ID-Token": user_id_token,
         "X-North-Connector-Tokens": connector_tokens_b64,
     }
-    if include_server_secret:
-        headers["X-North-Server-Secret"] = "server_secret"
     return headers
 
 
@@ -51,7 +48,6 @@ def create_x_north_headers_with_issuer(
 async def test_x_north_headers_without_trusted_issuers():
     """Test X-North headers work normally when no trusted issuers configured."""
     backend = NorthAuthBackend(
-        server_secret="server_secret",
         trusted_issuers=None,  # No signature verification
     )
 
@@ -91,7 +87,6 @@ async def test_auth_without_configuration_still_parses_x_north_headers():
     headers = create_x_north_headers_with_issuer(
         email="test@company.com",
         issuer="https://untrusted.example.com",
-        include_server_secret=False,
     )
     conn = create_mock_connection(headers)
 
@@ -124,7 +119,6 @@ async def test_trusted_issuers_require_auth_headers():
 async def test_x_north_headers_trusted_issuers_missing_issuer():
     """Test X-North headers reject tokens missing issuer when trusted issuers configured."""
     backend = NorthAuthBackend(
-        server_secret="server_secret",
         trusted_issuers=["https://example.okta.com"],
     )
 
@@ -135,7 +129,6 @@ async def test_x_north_headers_trusted_issuers_missing_issuer():
     )
     headers = {
         "X-North-ID-Token": user_id_token,
-        "X-North-Server-Secret": "server_secret",
     }
     conn = create_mock_connection(headers)
 
@@ -147,7 +140,6 @@ async def test_x_north_headers_trusted_issuers_missing_issuer():
 async def test_x_north_headers_trusted_issuers_untrusted_issuer():
     """Test X-North headers reject tokens from untrusted issuers."""
     backend = NorthAuthBackend(
-        server_secret="server_secret",
         trusted_issuers=["https://example.okta.com"],  # Only trust this issuer
     )
 
@@ -166,7 +158,6 @@ async def test_x_north_headers_trusted_issuers_untrusted_issuer():
 async def test_x_north_headers_trusted_issuers_missing_kid():
     """Test X-North headers reject tokens missing key ID when trusted issuers configured."""
     backend = NorthAuthBackend(
-        server_secret="server_secret",
         trusted_issuers=["https://example.okta.com"],
     )
 
@@ -181,7 +172,6 @@ async def test_x_north_headers_trusted_issuers_missing_kid():
     )
     headers = {
         "X-North-ID-Token": user_id_token,
-        "X-North-Server-Secret": "server_secret",
     }
     conn = create_mock_connection(headers)
 
