@@ -17,8 +17,8 @@ This repository provides code to enable your server to use authentication with N
 ## Main differences
 
 * North only supports the StreamableHTTP transport. The sse transport is deprecated, it will work for backwards compatibility, but you shouldn't use it if you are creating new servers
-* You can validate North user identity with ID tokens and, for production,
-  restrict accepted identity providers with `trusted_issuers`.
+* You can validate North user identity with ID tokens and optionally restrict
+  accepted identity providers with `trusted_issuers` for production.
 * You can access the user's OAuth token to interact with third-party services on their behalf.
 * You can access the user's identity (from the identity provider used with North).
 * **Debug mode** for detailed authentication logging and troubleshooting.
@@ -49,9 +49,10 @@ This SDK offers several strategies for authenticating users and authorizing thei
 
 #### I only want North to be able to send requests to my server
 
-Use trusted issuers so the server verifies that `X-North-ID-Token` was issued
-by an expected identity provider. North server secrets and
-`X-North-Server-Secret` are deprecated and should not be used for new servers.
+North sends an `X-North-ID-Token` with requests. For production, configure
+`trusted_issuers` so your server verifies that token was issued by an expected
+identity provider. For local development or lower-risk setups, this setting is
+optional and tokens are decoded without signature verification.
 
 ```python
 mcp = NorthMCPServer(
