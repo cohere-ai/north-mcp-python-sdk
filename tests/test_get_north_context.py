@@ -118,7 +118,7 @@ async def test_get_north_context_ignores_non_context_headers(
     headers = {
         "X-North-Context-Valid": "included",
         "X-North-ID-Token": "not-included",
-        "X-North-Server-Secret": "not-included",
+        "X-North-User-Email": "not-included",
         "Authorization": "Bearer not-included",
         "Content-Type": "application/json",
     }

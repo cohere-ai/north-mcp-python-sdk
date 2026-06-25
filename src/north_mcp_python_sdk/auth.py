@@ -38,7 +38,6 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 
 class AuthHeaderTokens(BaseModel):
-    server_secret: str | None = None
     user_id_token: str | None
     connector_access_tokens: dict[str, str] = Field(default_factory=dict)
 
@@ -206,25 +205,18 @@ class NorthAuthBackend(AuthenticationBackend):
     Authentication backend that validates tokens from either:
     1. X-North headers: X-North-ID-Token and optional X-North-Connector-Tokens
     2. Legacy Authorization Bearer header (backwards compatibility)
-
-    X-North-Server-Secret/server_secret remains only for deprecated
-    compatibility with existing servers. New deployments should use
-    trusted_issuers so ID token signatures are verified cryptographically.
     """
 
-    _server_secret: str | None
     _trusted_issuers: list[str] | None
     debug: bool
     logger: logging.Logger
 
     def __init__(
         self,
-        server_secret: str | None = None,
         trusted_issuers: list[str] | None = None,
         logger: logging.Logger | None = None,
         debug: bool = False,
     ):
-        self._server_secret = server_secret
         self._trusted_issuers = trusted_issuers
         self.debug = debug
         self.logger = logger or logging.getLogger("NorthMCP.AuthBackend")
@@ -239,7 +231,6 @@ class NorthAuthBackend(AuthenticationBackend):
             for header in [
                 "X-North-ID-Token",
                 "X-North-Connector-Tokens",
-                "X-North-Server-Secret",
             ]
         )
 
@@ -279,21 +270,7 @@ class NorthAuthBackend(AuthenticationBackend):
         return tokens
 
     def _auth_is_configured(self) -> bool:
-        return bool(self._server_secret or self._trusted_issuers)
-
-    def _validate_server_secret(self, provided_secret: str | None) -> None:
-        """Validate deprecated server secret compatibility."""
-        if provided_secret:
-            warn(
-                "X-North-Server-Secret is deprecated. Use trusted_issuers and X-North-ID-Token instead.",
-                DeprecationWarning,
-            )
-
-        if (
-            self._server_secret and self._server_secret != provided_secret
-        ) or (not self._server_secret and provided_secret):
-            self.logger.debug("Server secret mismatch - access denied")
-            raise AuthenticationError("access denied")
+        return bool(self._trusted_issuers)
 
     def _process_user_id_token(self, user_id_token: str | None) -> str | None:
         """Process and validate user ID token, return email or None."""
@@ -369,18 +346,12 @@ class NorthAuthBackend(AuthenticationBackend):
         """Authenticate using new X-North headers."""
         self.logger.debug("Using X-North headers for authentication")
 
-        # Extract headers
-        # Auth Headers
         user_id_token = conn.headers.get("X-North-ID-Token")
-        server_secret = conn.headers.get("X-North-Server-Secret")
 
-        if not user_id_token and not server_secret:
-            self.logger.debug(
-                "No X-North-ID-Token or X-North-Server-Secret header present"
-            )
+        if not user_id_token:
+            self.logger.debug("No X-North-ID-Token header present")
             raise AuthenticationError("no authentication headers present")
 
-        self._validate_server_secret(server_secret)
         token_email = self._process_user_id_token(user_id_token)
 
         self.logger.debug("X-North authentication successful")
@@ -405,8 +376,7 @@ class NorthAuthBackend(AuthenticationBackend):
             email = user_email_header
 
         self.logger.debug(
-            "X-North headers parsed. Has deprecated server_secret: %s, Has user_id_token: %s, Connector count: %d",
-            server_secret is not None and server_secret != "",
+            "X-North headers parsed. Has user_id_token: %s, Connector count: %d",
             user_id_token is not None and user_id_token != "",
             len(connector_access_tokens),
         )
@@ -448,8 +418,7 @@ class NorthAuthBackend(AuthenticationBackend):
         try:
             tokens = AuthHeaderTokens.model_validate_json(decoded_auth_header)
             self.logger.debug(
-                "Successfully parsed auth tokens. Has deprecated server_secret: %s, Has user_id_token: %s, Connector count: %d",
-                tokens.server_secret is not None,
+                "Successfully parsed auth tokens. Has user_id_token: %s, Connector count: %d",
                 tokens.user_id_token is not None,
                 len(tokens.connector_access_tokens),
             )
@@ -461,7 +430,10 @@ class NorthAuthBackend(AuthenticationBackend):
             self.logger.debug("Failed to validate auth tokens: %s", e)
             raise AuthenticationError("unable to decode bearer token")
 
-        self._validate_server_secret(tokens.server_secret)
+        if not tokens.user_id_token:
+            self.logger.debug("No user ID token present in bearer token")
+            raise AuthenticationError("no authentication headers present")
+
         email = self._process_user_id_token(tokens.user_id_token)
 
         self.logger.debug("Legacy authentication successful")
@@ -492,7 +464,7 @@ class NorthAuthBackend(AuthenticationBackend):
                 return await self._authenticate_legacy_bearer(conn)
 
             self.logger.debug(
-                "No server secret or trusted issuer configuration present and no auth headers provided; skipping authentication"
+                "No trusted issuer configuration present and no auth headers provided; skipping authentication"
             )
             return self._create_authenticated_user(
                 email=None,
@@ -584,8 +556,6 @@ class NorthTokenVerifier(AuthProvider):
         trusted_issuers: List of OIDC issuer URLs for cryptographic token
             verification. If not provided, tokens are decoded but signatures
             are not verified.
-        server_secret: Deprecated compatibility secret. New integrations should
-            use trusted_issuers with X-North-ID-Token instead.
         required_scopes: Optional list of scopes the token must contain.
         debug: Enable debug logging for authentication flow.
 
@@ -614,7 +584,6 @@ class NorthTokenVerifier(AuthProvider):
     """
 
     trusted_issuers: list[str] | None
-    server_secret: str | None
     debug: bool
     logger: logging.Logger
     backend: NorthAuthBackend
@@ -623,12 +592,10 @@ class NorthTokenVerifier(AuthProvider):
         self,
         trusted_issuers: list[str] | None = None,
         *,
-        server_secret: str | None = None,
         debug: bool | None = None,
     ):
         super().__init__()
         self.trusted_issuers = trusted_issuers
-        self.server_secret = server_secret
         self.debug = debug if debug is not None else False
         self.logger = logging.getLogger(__name__)
         if debug:
@@ -637,7 +604,6 @@ class NorthTokenVerifier(AuthProvider):
             self.logger.setLevel(logging.INFO)
 
         self.backend = NorthAuthBackend(
-            server_secret=self.server_secret,
             trusted_issuers=self.trusted_issuers,
             logger=self.logger,
             debug=self.debug,

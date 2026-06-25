@@ -1,7 +1,6 @@
 import logging
 import os
 from typing import Any
-from warnings import warn
 
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
@@ -44,7 +43,6 @@ class NorthMCPServer(FastMCP):
         self,
         name: str | None = None,
         instructions: str | None = None,
-        server_secret: str | None = None,
         trusted_issuers: list[str] | None = None,
         debug: bool | None = None,
         telemetry: TelemetryConfig | None = None,
@@ -55,16 +53,10 @@ class NorthMCPServer(FastMCP):
         telemetry_config = (
             telemetry if telemetry is not None else _TELEMETRY_DISABLED
         )
-        if server_secret:
-            warn(
-                "server_secret is deprecated. Use trusted_issuers for new North MCP servers.",
-                DeprecationWarning,
-            )
 
         kwargs: dict[str, Any] = {
             **settings,
             "auth": NorthTokenVerifier(
-                server_secret=server_secret,
                 trusted_issuers=trusted_issuers,
                 debug=is_debug,
             ),

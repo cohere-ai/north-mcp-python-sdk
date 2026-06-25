@@ -60,7 +60,6 @@ class TestTrustedIssuers:
             )
 
         header = AuthHeaderTokens(
-            server_secret=None,
             user_id_token=user_id_token,
             connector_access_tokens={"slack": "test-token"},
         )
