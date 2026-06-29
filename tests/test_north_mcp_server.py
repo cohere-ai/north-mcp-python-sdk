@@ -38,7 +38,9 @@ def app_with_auth() -> NorthMCPServer:
 
 
 def test_server_secret_kwarg_raises_targeted_error():
-    with pytest.raises(TypeError, match="server_secret is no longer supported"):
+    with pytest.raises(
+        TypeError, match="server_secret is no longer supported"
+    ):
         NorthMCPServer(server_secret="stale-secret")
 
 
