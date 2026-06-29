@@ -37,6 +37,11 @@ def app_with_auth() -> NorthMCPServer:
     return NorthMCPServer(trusted_issuers=["https://example.okta.com"])
 
 
+def test_server_secret_kwarg_raises_targeted_error():
+    with pytest.raises(TypeError, match="server_secret is no longer supported"):
+        NorthMCPServer(server_secret="stale-secret")
+
+
 @pytest_asyncio.fixture
 async def auth_test_client(app_with_auth: NorthMCPServer):
     asgi_app = app_with_auth.http_app(transport="streamable-http")

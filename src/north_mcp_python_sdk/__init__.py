@@ -18,6 +18,10 @@ from .telemetry import (
 )
 
 _LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+_SERVER_SECRET_UNSUPPORTED_MESSAGE = (
+    "server_secret is no longer supported. Remove server_secret= and configure "
+    "trusted_issuers for North MCP authentication."
+)
 
 
 def is_debug_mode() -> bool:
@@ -53,6 +57,8 @@ class NorthMCPServer(FastMCP):
         telemetry_config = (
             telemetry if telemetry is not None else _TELEMETRY_DISABLED
         )
+        if "server_secret" in settings:
+            raise TypeError(_SERVER_SECRET_UNSUPPORTED_MESSAGE)
 
         kwargs: dict[str, Any] = {
             **settings,
