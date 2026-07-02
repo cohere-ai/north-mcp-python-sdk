@@ -17,7 +17,8 @@ This repository provides code to enable your server to use authentication with N
 ## Main differences
 
 * North only supports the StreamableHTTP transport. The sse transport is deprecated, it will work for backwards compatibility, but you shouldn't use it if you are creating new servers
-* You can protect all requests to your server with a secret.
+* You can validate North user identity with ID tokens and optionally restrict
+  accepted identity providers with `trusted_issuers` for production.
 * You can access the user's OAuth token to interact with third-party services on their behalf.
 * You can access the user's identity (from the identity provider used with North).
 * **Debug mode** for detailed authentication logging and troubleshooting.
@@ -46,9 +47,19 @@ Examples cover authentication, tool metadata for the North UI, debug mode, and O
 This SDK offers several strategies for authenticating users and authorizing their requests.
 
 
-#### I only want north to be able to send requests to my server
+#### I only want North to be able to send requests to my server
+
+North sends an `X-North-ID-Token` with requests. For production, configure
+`trusted_issuers` so your server verifies that token was issued by an expected
+identity provider. For local development or lower-risk setups, this setting is
+optional and tokens are decoded without signature verification.
+
 ```python
-mcp = NorthMCPServer(name="Demo", port=5222, server_secret="secret")
+mcp = NorthMCPServer(
+    name="Demo",
+    port=5222,
+    trusted_issuers=["https://your-idp.example.com"],
+)
 ```
 
 #### I want to get the identity of the north user that is calling my server
@@ -102,7 +113,7 @@ When debug mode is enabled, you'll see detailed logs including:
 2024-01-15 10:30:45 - NorthMCP.Auth - DEBUG - Request headers: {'authorization': 'Bearer eyJ...', 'content-type': 'application/json'}
 2024-01-15 10:30:45 - NorthMCP.Auth - DEBUG - Authorization header present (length: 248)
 2024-01-15 10:30:45 - NorthMCP.Auth - DEBUG - Successfully decoded base64 auth header
-2024-01-15 10:30:45 - NorthMCP.Auth - DEBUG - Successfully parsed auth tokens. Has server_secret: True, Has user_id_token: True, Connector count: 2
+2024-01-15 10:30:45 - NorthMCP.Auth - DEBUG - Successfully parsed auth tokens. Has user_id_token: True, Connector count: 2
 2024-01-15 10:30:45 - NorthMCP.Auth - DEBUG - Available connectors: ['google', 'slack']
 2024-01-15 10:30:45 - NorthMCP.Auth - DEBUG - Successfully decoded user ID token. Email: user@example.com
 2024-01-15 10:30:45 - NorthMCP.AuthContext - DEBUG - Setting authenticated user in context: email=user@example.com, connectors=['google', 'slack']

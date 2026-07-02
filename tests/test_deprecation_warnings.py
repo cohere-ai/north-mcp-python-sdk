@@ -26,67 +26,6 @@ def create_mock_connection(headers: dict[str, str]):
     return mock_conn
 
 
-class TestServerSecretDeprecation:
-    """Tests for X-North-Server-Secret deprecation warnings."""
-
-    @pytest.mark.asyncio
-    async def test_server_secret_header_emits_deprecation_warning(self):
-        """Test that X-North-Server-Secret header emits deprecation warning."""
-        backend = NorthAuthBackend(server_secret="server_secret")
-
-        user_id_token = jwt.encode(
-            payload={"email": "test@company.com"}, key="test"
-        )
-        headers = {
-            "X-North-ID-Token": user_id_token,
-            "X-North-Server-Secret": "server_secret",
-        }
-        conn = create_mock_connection(headers)
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            await backend.authenticate(conn)
-
-            # Check that a deprecation warning was issued
-            deprecation_warnings = [
-                warning
-                for warning in w
-                if issubclass(warning.category, DeprecationWarning)
-            ]
-            assert len(deprecation_warnings) >= 1
-
-            # Check the warning message
-            warning_messages = [str(dw.message) for dw in deprecation_warnings]
-            assert any(
-                "X-North-Server-Secret is deprecated" in msg
-                for msg in warning_messages
-            )
-
-    @pytest.mark.asyncio
-    async def test_no_server_secret_no_deprecation_warning(self):
-        """Test that no warning when server secret is not used."""
-        backend = NorthAuthBackend()
-
-        user_id_token = jwt.encode(
-            payload={"email": "test@company.com"}, key="test"
-        )
-        headers = {"X-North-ID-Token": user_id_token}
-        conn = create_mock_connection(headers)
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            await backend.authenticate(conn)
-
-            # Filter for server secret deprecation warnings specifically
-            server_secret_warnings = [
-                warning
-                for warning in w
-                if issubclass(warning.category, DeprecationWarning)
-                and "X-North-Server-Secret" in str(warning.message)
-            ]
-            assert len(server_secret_warnings) == 0
-
-
 class TestConnectorTokensDeprecation:
     """Tests for X-North-Connector-Tokens deprecation warnings."""
 
@@ -152,46 +91,6 @@ class TestConnectorTokensDeprecation:
                 and "X-North-Connector-Tokens" in str(warning.message)
             ]
             assert len(connector_warnings) == 0
-
-
-class TestLegacyBearerDeprecation:
-    """Tests for legacy Bearer token auth deprecation behavior."""
-
-    @pytest.mark.asyncio
-    async def test_legacy_bearer_with_server_secret(self):
-        """Test that legacy bearer with server secret emits deprecation warning."""
-        from north_mcp_python_sdk.auth import AuthHeaderTokens
-
-        backend = NorthAuthBackend(server_secret="server_secret")
-
-        user_token = jwt.encode(
-            payload={"email": "legacy@company.com"}, key="test"
-        )
-        legacy_header = AuthHeaderTokens(
-            server_secret="server_secret",
-            user_id_token=user_token,
-            connector_access_tokens={"legacy": "legacy_token"},
-        )
-        legacy_b64 = base64.b64encode(
-            json.dumps(legacy_header.model_dump()).encode()
-        ).decode()
-
-        headers = {"Authorization": f"Bearer {legacy_b64}"}
-        conn = create_mock_connection(headers)
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            await backend.authenticate(conn)
-
-            # Legacy bearer with server_secret should trigger the deprecation
-            # warning from _validate_server_secret
-            deprecation_warnings = [
-                warning
-                for warning in w
-                if issubclass(warning.category, DeprecationWarning)
-                and "X-North-Server-Secret" in str(warning.message)
-            ]
-            assert len(deprecation_warnings) >= 1
 
 
 class TestGetAuthenticatedUserDeprecation:

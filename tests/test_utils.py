@@ -318,12 +318,10 @@ class TestAuthHeaderTokens:
         from north_mcp_python_sdk.auth import AuthHeaderTokens
 
         tokens = AuthHeaderTokens(
-            server_secret="secret123",
             user_id_token="jwt.token.here",
             connector_access_tokens={"google": "token"},
         )
 
-        assert tokens.server_secret == "secret123"
         assert tokens.user_id_token == "jwt.token.here"
         assert tokens.connector_access_tokens == {"google": "token"}
 
@@ -332,12 +330,10 @@ class TestAuthHeaderTokens:
         from north_mcp_python_sdk.auth import AuthHeaderTokens
 
         tokens = AuthHeaderTokens(
-            server_secret=None,
             user_id_token=None,
             connector_access_tokens={},
         )
 
-        assert tokens.server_secret is None
         assert tokens.user_id_token is None
         assert tokens.connector_access_tokens == {}
 
@@ -346,7 +342,6 @@ class TestAuthHeaderTokens:
         from north_mcp_python_sdk.auth import AuthHeaderTokens
 
         tokens = AuthHeaderTokens(
-            server_secret=None,
             user_id_token=None,
         )
 

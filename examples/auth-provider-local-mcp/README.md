@@ -35,8 +35,7 @@ SERVER_HOST="localhost"
 SERVER_PORT=5885
 
 # North auth configuration (for north mode)
-# NORTH_TRUSTED_ISSUERS=""      # Comma-separated list of trusted issuers (optional)
-# NORTH_SERVER_SECRET=""        # Server secret for server-to-server auth (optional)
+# NORTH_TRUSTED_ISSUERS=""      # Comma-separated list of trusted issuers
 ```
 
 ### 2. Install Python Dependencies
@@ -249,8 +248,7 @@ from north_mcp_python_sdk.auth import NorthTokenVerifier
 
 # Configure North authentication
 auth = NorthTokenVerifier(
-    trusted_issuers=["https://auth.north.app"],  # Optional: restrict to specific issuers
-    server_secret="your-server-secret",          # Optional: for server-to-server auth
+    trusted_issuers=["https://auth.north.app"],
 )
 
 # Create the MCP server with North auth

@@ -32,7 +32,6 @@ class TestNorthTokenVerifierInit:
         verifier = NorthTokenVerifier()
 
         assert verifier.trusted_issuers is None
-        assert verifier.server_secret is None
         assert verifier.debug is False
         assert isinstance(verifier.backend, NorthAuthBackend)
 
@@ -43,13 +42,6 @@ class TestNorthTokenVerifierInit:
 
         assert verifier.trusted_issuers == issuers
         assert verifier.backend._trusted_issuers == issuers
-
-    def test_init_with_server_secret(self):
-        """Test initialization with server secret."""
-        verifier = NorthTokenVerifier(server_secret="my-secret")
-
-        assert verifier.server_secret == "my-secret"
-        assert verifier.backend._server_secret == "my-secret"
 
     def test_init_with_debug_enabled(self):
         """Test initialization with debug mode enabled."""
@@ -62,12 +54,10 @@ class TestNorthTokenVerifierInit:
         """Test initialization with all options specified."""
         verifier = NorthTokenVerifier(
             trusted_issuers=["https://auth.example.com"],
-            server_secret="secret-123",
             debug=True,
         )
 
         assert verifier.trusted_issuers == ["https://auth.example.com"]
-        assert verifier.server_secret == "secret-123"
         assert verifier.debug is True
 
 
@@ -92,7 +82,7 @@ class TestNorthTokenVerifierMiddleware:
 
     def test_middleware_passes_backend(self):
         """Test that the middleware is configured with the correct backend."""
-        verifier = NorthTokenVerifier(server_secret="test-secret")
+        verifier = NorthTokenVerifier()
         middleware = verifier.get_middleware()
 
         # Check middleware kwargs contain the backend
@@ -131,13 +121,11 @@ class TestNorthTokenVerifierIntegration:
 
     @staticmethod
     def create_auth_header(
-        server_secret: str | None = None,
         email: str = "test@example.com",
     ) -> str:
         """Create a valid authentication header."""
         user_id_token = jwt.encode(payload={"email": email}, key="test-secret")
         auth_data = {
-            "server_secret": server_secret,
             "user_id_token": user_id_token,
             "connector_access_tokens": {},
         }
@@ -148,24 +136,6 @@ class TestNorthTokenVerifierIntegration:
     async def fastmcp_with_north_auth(self):
         """Create FastMCP server with NorthTokenVerifier."""
         auth = NorthTokenVerifier()
-        mcp = FastMCP("test-server", auth=auth)
-
-        @mcp.tool()
-        def echo(message: str) -> str:
-            return f"Echo: {message}"
-
-        app = mcp.http_app(transport="streamable-http")
-        async with LifespanManager(app) as manager:
-            async with httpx.AsyncClient(
-                transport=httpx.ASGITransport(app=manager.app),
-                base_url="http://test",
-            ) as client:
-                yield client
-
-    @pytest_asyncio.fixture
-    async def fastmcp_with_secret(self):
-        """Create FastMCP server with NorthTokenVerifier and server secret."""
-        auth = NorthTokenVerifier(server_secret="test-secret")
         mcp = FastMCP("test-server", auth=auth)
 
         @mcp.tool()
@@ -201,71 +171,6 @@ class TestNorthTokenVerifierIntegration:
         """Test that MCP routes work with valid authentication."""
         auth_header = self.create_auth_header()
         response = await fastmcp_with_north_auth.post(
-            "/mcp",
-            headers={"Authorization": auth_header},
-            json={
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "initialize",
-                "params": {
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {},
-                    "clientInfo": {"name": "test", "version": "1.0"},
-                },
-            },
-        )
-        assert response.status_code != 401
-
-    @pytest.mark.asyncio
-    async def test_server_secret_validation(self, fastmcp_with_secret):
-        """Test that server secret is validated."""
-        # Without secret - should fail
-        auth_header = self.create_auth_header(server_secret=None)
-        response = await fastmcp_with_secret.post(
-            "/mcp",
-            headers={"Authorization": auth_header},
-            json={
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "initialize",
-                "params": {},
-            },
-        )
-        assert response.status_code == 401
-
-    @pytest.mark.asyncio
-    async def test_server_secret_auth_requires_headers(
-        self, fastmcp_with_secret
-    ):
-        """Test that MCP routes require auth when server secret auth is configured."""
-        response = await fastmcp_with_secret.post(
-            "/mcp",
-            json={
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "initialize",
-                "params": {},
-            },
-        )
-        assert response.status_code == 401
-
-        # With wrong secret - should fail
-        auth_header = self.create_auth_header(server_secret="wrong-secret")
-        response = await fastmcp_with_secret.post(
-            "/mcp",
-            headers={"Authorization": auth_header},
-            json={
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "initialize",
-                "params": {},
-            },
-        )
-        assert response.status_code == 401
-
-        # With correct secret - should work
-        auth_header = self.create_auth_header(server_secret="test-secret")
-        response = await fastmcp_with_secret.post(
             "/mcp",
             headers={"Authorization": auth_header},
             json={
