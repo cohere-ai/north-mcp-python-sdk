@@ -116,6 +116,21 @@ async def test_trusted_issuers_require_auth_headers():
 
 
 @pytest.mark.asyncio
+async def test_trusted_issuers_reject_email_header_without_id_token():
+    backend = NorthAuthBackend(
+        trusted_issuers=["https://example.okta.com"],
+    )
+    conn = create_mock_connection(
+        {"X-North-User-Email": "fallback@company.com"}
+    )
+
+    with pytest.raises(
+        AuthenticationError, match="no authentication headers present"
+    ):
+        await backend.authenticate(conn)
+
+
+@pytest.mark.asyncio
 async def test_x_north_headers_trusted_issuers_missing_issuer():
     """Test X-North headers reject tokens missing issuer when trusted issuers configured."""
     backend = NorthAuthBackend(
