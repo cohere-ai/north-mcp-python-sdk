@@ -231,7 +231,6 @@ class NorthAuthBackend(AuthenticationBackend):
             for header in [
                 "X-North-ID-Token",
                 "X-North-Connector-Tokens",
-                "X-North-User-Email",
             ]
         )
 
@@ -348,20 +347,18 @@ class NorthAuthBackend(AuthenticationBackend):
         self.logger.debug("Using X-North headers for authentication")
 
         user_id_token = conn.headers.get("X-North-ID-Token")
-        user_email_header = conn.headers.get("X-North-User-Email")
 
         if not user_id_token:
             self.logger.debug("No X-North-ID-Token header present")
-            if self._auth_is_configured() or not user_email_header:
-                raise AuthenticationError("no authentication headers present")
-            token_email = None
-        else:
-            token_email = self._process_user_id_token(user_id_token)
+            raise AuthenticationError("no authentication headers present")
+
+        token_email = self._process_user_id_token(user_id_token)
 
         self.logger.debug("X-North authentication successful")
 
         # Additional Headers
         connector_tokens_header = conn.headers.get("X-North-Connector-Tokens")
+        user_email_header = conn.headers.get("X-North-User-Email")
 
         # Parse connector tokens (Base64 URL-safe encoded JSON)
         connector_access_tokens = {}
