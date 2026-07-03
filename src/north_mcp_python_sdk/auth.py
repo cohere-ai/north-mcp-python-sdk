@@ -231,6 +231,7 @@ class NorthAuthBackend(AuthenticationBackend):
             for header in [
                 "X-North-ID-Token",
                 "X-North-Connector-Tokens",
+                "X-North-User-Email",
             ]
         )
 
@@ -341,24 +342,26 @@ class NorthAuthBackend(AuthenticationBackend):
         )
 
     async def _authenticate_x_north_headers(
-        self, conn: HTTPConnection
+        self, conn: HTTPConnection, *, require_id_token: bool = True
     ) -> tuple[AuthCredentials, BaseUser]:
         """Authenticate using new X-North headers."""
         self.logger.debug("Using X-North headers for authentication")
 
         user_id_token = conn.headers.get("X-North-ID-Token")
+        user_email_header = conn.headers.get("X-North-User-Email")
 
         if not user_id_token:
             self.logger.debug("No X-North-ID-Token header present")
-            raise AuthenticationError("no authentication headers present")
-
-        token_email = self._process_user_id_token(user_id_token)
+            if require_id_token:
+                raise AuthenticationError("no authentication headers present")
+            token_email = None
+        else:
+            token_email = self._process_user_id_token(user_id_token)
 
         self.logger.debug("X-North authentication successful")
 
         # Additional Headers
         connector_tokens_header = conn.headers.get("X-North-Connector-Tokens")
-        user_email_header = conn.headers.get("X-North-User-Email")
 
         # Parse connector tokens (Base64 URL-safe encoded JSON)
         connector_access_tokens = {}
@@ -455,7 +458,9 @@ class NorthAuthBackend(AuthenticationBackend):
                 self.logger.debug(
                     "No auth configured, but X-North headers are present; parsing request context without enforcing authentication"
                 )
-                return await self._authenticate_x_north_headers(conn)
+                return await self._authenticate_x_north_headers(
+                    conn, require_id_token=False
+                )
 
             if conn.headers.get("Authorization"):
                 self.logger.debug(
