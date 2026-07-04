@@ -209,6 +209,36 @@ async def test_x_north_user_email_header_fallback():
 
 
 @pytest.mark.asyncio
+async def test_x_north_connector_tokens_without_id_token_open_auth():
+    """Test connector tokens can provide context without an ID token in open auth mode."""
+    backend = NorthAuthBackend()
+
+    connector_tokens_json = json.dumps({"github": "token123"})
+    connector_tokens_b64 = (
+        base64.urlsafe_b64encode(connector_tokens_json.encode())
+        .decode()
+        .rstrip("=")
+    )
+    headers = {
+        "X-North-Connector-Tokens": connector_tokens_b64,
+        "X-North-User-Email": "fallback@company.com",
+    }
+    conn = create_mock_connection(headers)
+
+    auth_response = await backend.authenticate(conn)
+    if auth_response is None:
+        raise ValueError("Authentication response is None")
+    _, user = auth_response
+
+    assert isinstance(user, AuthenticatedUser)
+    assert user.access_token.token == ""
+    assert user.access_token.claims["email"] == "fallback@company.com"
+    assert user.access_token.claims["connector_access_tokens"] == {
+        "github": "token123"
+    }
+
+
+@pytest.mark.asyncio
 async def test_x_north_user_email_header_not_override_token_email():
     """Test that ID token email takes precedence over X-North-User-Email."""
     backend = NorthAuthBackend()
