@@ -10,7 +10,7 @@ import httpx
 import jwt
 from asgi_lifespan import LifespanManager
 from starlette.requests import Request
-from starlette.responses import JSONResponse, PlainTextResponse
+from starlette.responses import JSONResponse
 
 from north_mcp_python_sdk import NorthMCPServer
 from north_mcp_python_sdk.auth import get_authenticated_user
