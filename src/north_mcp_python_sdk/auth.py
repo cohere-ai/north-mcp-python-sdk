@@ -38,7 +38,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 
 class AuthHeaderTokens(BaseModel):
-    server_secret: str | None
+    server_secret: str | None = None
     user_id_token: str | None
     connector_access_tokens: dict[str, str] = Field(default_factory=dict)
 
