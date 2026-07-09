@@ -116,6 +116,21 @@ async def test_trusted_issuers_require_auth_headers():
 
 
 @pytest.mark.asyncio
+async def test_trusted_issuers_reject_email_header_without_id_token():
+    backend = NorthAuthBackend(
+        trusted_issuers=["https://example.okta.com"],
+    )
+    conn = create_mock_connection(
+        {"X-North-User-Email": "fallback@company.com"}
+    )
+
+    with pytest.raises(
+        AuthenticationError, match="invalid authorization header"
+    ):
+        await backend.authenticate(conn)
+
+
+@pytest.mark.asyncio
 async def test_trusted_issuers_reject_connector_tokens_without_id_token():
     backend = NorthAuthBackend(
         trusted_issuers=["https://example.okta.com"],
