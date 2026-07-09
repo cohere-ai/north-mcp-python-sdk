@@ -177,6 +177,43 @@ async def test_legacy_bearer_fallback():
 
 
 @pytest.mark.asyncio
+async def test_legacy_bearer_fallback_with_user_email_context_header():
+    """Test X-North-User-Email alone does not block legacy bearer auth."""
+    from north_mcp_python_sdk.auth import AuthHeaderTokens
+
+    backend = NorthAuthBackend(server_secret="server_secret")
+
+    user_token = jwt.encode(
+        payload={"email": "legacy@company.com"}, key="test"
+    )
+    legacy_header = AuthHeaderTokens(
+        server_secret="server_secret",
+        user_id_token=user_token,
+        connector_access_tokens={"legacy": "legacy_token"},
+    )
+    legacy_b64 = base64.b64encode(
+        json.dumps(legacy_header.model_dump()).encode()
+    ).decode()
+
+    headers = {
+        "Authorization": f"Bearer {legacy_b64}",
+        "X-North-User-Email": "context@company.com",
+    }
+    conn = create_mock_connection(headers)
+
+    auth_response = await backend.authenticate(conn)
+    if auth_response is None:
+        raise ValueError("Authentication response is None")
+    _, user = auth_response
+
+    assert isinstance(user, AuthenticatedUser)
+    assert user.access_token.claims["email"] == "legacy@company.com"
+    assert user.access_token.claims["connector_access_tokens"] == {
+        "legacy": "legacy_token"
+    }
+
+
+@pytest.mark.asyncio
 async def test_minimal_x_north_headers():
     """Test X-North with minimal headers (just server secret)."""
     backend = NorthAuthBackend(server_secret="server_secret")
@@ -291,7 +328,7 @@ async def test_x_north_server_secret_still_required_without_user_auth():
     conn = create_mock_connection({"X-North-User-Email": "email@company.com"})
 
     with pytest.raises(
-        AuthenticationError, match="no authentication headers present"
+        AuthenticationError, match="invalid authorization header"
     ):
         await backend.authenticate(conn)
 

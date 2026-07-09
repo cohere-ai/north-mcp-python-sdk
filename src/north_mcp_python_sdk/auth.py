@@ -236,7 +236,6 @@ class NorthAuthBackend(AuthenticationBackend):
                 "X-North-ID-Token",
                 "X-North-Connector-Tokens",
                 "X-North-Server-Secret",
-                "X-North-User-Email",
             ]
         )
 
