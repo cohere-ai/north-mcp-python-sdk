@@ -95,7 +95,7 @@ async def test_invalid_base64_auth_header(
 
 
 @pytest.mark.asyncio
-async def test_missing_server_secret():
+async def test_missing_server_secret_allows_user_auth():
     server = NorthMCPServer(server_secret="secret")
     asgi_app = server.http_app(transport="streamable-http")
 
@@ -120,7 +120,7 @@ async def test_missing_server_secret():
                 headers={"Authorization": f"Bearer {header_as_b64}"},
             )
 
-            assert result.status_code == 401, result.text
+            assert result.status_code != 401, result.text
 
 
 @pytest.mark.asyncio

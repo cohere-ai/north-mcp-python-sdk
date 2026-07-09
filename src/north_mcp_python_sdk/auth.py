@@ -38,7 +38,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 
 class AuthHeaderTokens(BaseModel):
-    server_secret: str | None
+    server_secret: str | None = None
     user_id_token: str | None
     connector_access_tokens: dict[str, str] = Field(default_factory=dict)
 
@@ -277,7 +277,12 @@ class NorthAuthBackend(AuthenticationBackend):
     def _auth_is_configured(self) -> bool:
         return bool(self._server_secret or self._trusted_issuers)
 
-    def _validate_server_secret(self, provided_secret: str | None) -> None:
+    def _validate_server_secret(
+        self,
+        provided_secret: str | None,
+        *,
+        allow_missing_with_user_auth: bool = False,
+    ) -> None:
         """Validate server secret matches expected value."""
         if provided_secret:
             warn(
@@ -285,9 +290,20 @@ class NorthAuthBackend(AuthenticationBackend):
                 DeprecationWarning,
             )
 
-        if (
-            self._server_secret and self._server_secret != provided_secret
-        ) or (not self._server_secret and provided_secret):
+        if self._server_secret and not provided_secret:
+            if allow_missing_with_user_auth:
+                self.logger.debug(
+                    "Server secret missing, allowing request with user authentication"
+                )
+                return
+            self.logger.debug("Server secret missing - access denied")
+            raise AuthenticationError("access denied")
+
+        if self._server_secret and self._server_secret != provided_secret:
+            self.logger.debug("Server secret mismatch - access denied")
+            raise AuthenticationError("access denied")
+
+        if not self._server_secret and provided_secret:
             self.logger.debug("Server secret mismatch - access denied")
             raise AuthenticationError("access denied")
 
@@ -360,7 +376,7 @@ class NorthAuthBackend(AuthenticationBackend):
         )
 
     async def _authenticate_x_north_headers(
-        self, conn: HTTPConnection
+        self, conn: HTTPConnection, *, require_auth_material: bool = True
     ) -> tuple[AuthCredentials, BaseUser]:
         """Authenticate using new X-North headers."""
         self.logger.debug("Using X-North headers for authentication")
@@ -374,9 +390,13 @@ class NorthAuthBackend(AuthenticationBackend):
             self.logger.debug(
                 "No X-North-ID-Token or X-North-Server-Secret header present"
             )
-            raise AuthenticationError("no authentication headers present")
+            if require_auth_material:
+                raise AuthenticationError("no authentication headers present")
 
-        self._validate_server_secret(server_secret)
+        self._validate_server_secret(
+            server_secret,
+            allow_missing_with_user_auth=bool(user_id_token),
+        )
         token_email = self._process_user_id_token(user_id_token)
 
         self.logger.debug("X-North authentication successful")
@@ -457,7 +477,10 @@ class NorthAuthBackend(AuthenticationBackend):
             self.logger.debug("Failed to validate auth tokens: %s", e)
             raise AuthenticationError("unable to decode bearer token")
 
-        self._validate_server_secret(tokens.server_secret)
+        self._validate_server_secret(
+            tokens.server_secret,
+            allow_missing_with_user_auth=bool(tokens.user_id_token),
+        )
         email = self._process_user_id_token(tokens.user_id_token)
 
         self.logger.debug("Legacy authentication successful")
@@ -479,7 +502,9 @@ class NorthAuthBackend(AuthenticationBackend):
                 self.logger.debug(
                     "No auth configured, but X-North headers are present; parsing request context without enforcing authentication"
                 )
-                return await self._authenticate_x_north_headers(conn)
+                return await self._authenticate_x_north_headers(
+                    conn, require_auth_material=False
+                )
 
             if conn.headers.get("Authorization"):
                 self.logger.debug(

@@ -177,6 +177,43 @@ async def test_legacy_bearer_fallback():
 
 
 @pytest.mark.asyncio
+async def test_legacy_bearer_fallback_with_user_email_context_header():
+    """Test X-North-User-Email alone does not block legacy bearer auth."""
+    from north_mcp_python_sdk.auth import AuthHeaderTokens
+
+    backend = NorthAuthBackend(server_secret="server_secret")
+
+    user_token = jwt.encode(
+        payload={"email": "legacy@company.com"}, key="test"
+    )
+    legacy_header = AuthHeaderTokens(
+        server_secret="server_secret",
+        user_id_token=user_token,
+        connector_access_tokens={"legacy": "legacy_token"},
+    )
+    legacy_b64 = base64.b64encode(
+        json.dumps(legacy_header.model_dump()).encode()
+    ).decode()
+
+    headers = {
+        "Authorization": f"Bearer {legacy_b64}",
+        "X-North-User-Email": "context@company.com",
+    }
+    conn = create_mock_connection(headers)
+
+    auth_response = await backend.authenticate(conn)
+    if auth_response is None:
+        raise ValueError("Authentication response is None")
+    _, user = auth_response
+
+    assert isinstance(user, AuthenticatedUser)
+    assert user.access_token.claims["email"] == "legacy@company.com"
+    assert user.access_token.claims["connector_access_tokens"] == {
+        "legacy": "legacy_token"
+    }
+
+
+@pytest.mark.asyncio
 async def test_minimal_x_north_headers():
     """Test X-North with minimal headers (just server secret)."""
     backend = NorthAuthBackend(server_secret="server_secret")
@@ -261,6 +298,130 @@ async def test_x_north_user_email_with_server_secret_only():
 
     assert isinstance(user, AuthenticatedUser)
     assert user.access_token.claims["email"] == "email@company.com"
+
+
+@pytest.mark.asyncio
+async def test_x_north_id_token_allowed_when_server_secret_missing():
+    """Test configured server secret does not block valid user-auth requests."""
+    backend = NorthAuthBackend(server_secret="server_secret")
+
+    user_id_token = jwt.encode(
+        payload={"email": "test@company.com"}, key="test"
+    )
+    headers = {"X-North-ID-Token": user_id_token}
+    conn = create_mock_connection(headers)
+
+    auth_response = await backend.authenticate(conn)
+    if auth_response is None:
+        raise ValueError("Authentication response is None")
+    _, user = auth_response
+
+    assert isinstance(user, AuthenticatedUser)
+    assert user.access_token.claims["email"] == "test@company.com"
+
+
+@pytest.mark.asyncio
+async def test_x_north_server_secret_still_required_without_user_auth():
+    """Test configured server secret still protects requests without user auth."""
+    backend = NorthAuthBackend(server_secret="server_secret")
+
+    conn = create_mock_connection({"X-North-User-Email": "email@company.com"})
+
+    with pytest.raises(
+        AuthenticationError, match="invalid authorization header"
+    ):
+        await backend.authenticate(conn)
+
+
+@pytest.mark.asyncio
+async def test_legacy_bearer_id_token_allowed_when_server_secret_missing():
+    """Test legacy bearer can use user auth without sending server secret."""
+    from north_mcp_python_sdk.auth import AuthHeaderTokens
+
+    backend = NorthAuthBackend(server_secret="server_secret")
+
+    user_id_token = jwt.encode(
+        payload={"email": "legacy@company.com"}, key="test"
+    )
+    legacy_header = AuthHeaderTokens(
+        server_secret=None,
+        user_id_token=user_id_token,
+        connector_access_tokens={"legacy": "legacy_token"},
+    )
+    legacy_b64 = base64.b64encode(
+        json.dumps(legacy_header.model_dump()).encode()
+    ).decode()
+
+    conn = create_mock_connection({"Authorization": f"Bearer {legacy_b64}"})
+
+    auth_response = await backend.authenticate(conn)
+    if auth_response is None:
+        raise ValueError("Authentication response is None")
+    _, user = auth_response
+
+    assert isinstance(user, AuthenticatedUser)
+    assert user.access_token.claims["email"] == "legacy@company.com"
+    assert user.access_token.claims["connector_access_tokens"] == {
+        "legacy": "legacy_token"
+    }
+
+
+@pytest.mark.asyncio
+async def test_legacy_bearer_id_token_allowed_when_server_secret_key_omitted():
+    """Test latest North legacy bundle shape works without server_secret key."""
+    backend = NorthAuthBackend(server_secret="server_secret")
+
+    user_id_token = jwt.encode(
+        payload={"email": "legacy@company.com"}, key="test"
+    )
+    legacy_header = {
+        "user_id_token": user_id_token,
+        "connector_access_tokens": {"legacy": "legacy_token"},
+    }
+    legacy_b64 = base64.b64encode(json.dumps(legacy_header).encode()).decode()
+
+    conn = create_mock_connection({"Authorization": f"Bearer {legacy_b64}"})
+
+    auth_response = await backend.authenticate(conn)
+    if auth_response is None:
+        raise ValueError("Authentication response is None")
+    _, user = auth_response
+
+    assert isinstance(user, AuthenticatedUser)
+    assert user.access_token.claims["email"] == "legacy@company.com"
+    assert user.access_token.claims["connector_access_tokens"] == {
+        "legacy": "legacy_token"
+    }
+
+
+@pytest.mark.asyncio
+async def test_x_north_connector_tokens_without_id_token_open_auth():
+    """Test connector tokens can provide context without an ID token in open auth mode."""
+    backend = NorthAuthBackend()
+
+    connector_tokens_json = json.dumps({"github": "token123"})
+    connector_tokens_b64 = (
+        base64.urlsafe_b64encode(connector_tokens_json.encode())
+        .decode()
+        .rstrip("=")
+    )
+    headers = {
+        "X-North-Connector-Tokens": connector_tokens_b64,
+        "X-North-User-Email": "fallback@company.com",
+    }
+    conn = create_mock_connection(headers)
+
+    auth_response = await backend.authenticate(conn)
+    if auth_response is None:
+        raise ValueError("Authentication response is None")
+    _, user = auth_response
+
+    assert isinstance(user, AuthenticatedUser)
+    assert user.access_token.token == ""
+    assert user.access_token.claims["email"] == "fallback@company.com"
+    assert user.access_token.claims["connector_access_tokens"] == {
+        "github": "token123"
+    }
 
 
 @pytest.mark.asyncio

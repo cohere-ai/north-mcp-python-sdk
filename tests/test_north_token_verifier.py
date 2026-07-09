@@ -218,8 +218,7 @@ class TestNorthTokenVerifierIntegration:
 
     @pytest.mark.asyncio
     async def test_server_secret_validation(self, fastmcp_with_secret):
-        """Test that server secret is validated."""
-        # Without secret - should fail
+        """Test that user auth works when server secret is absent."""
         auth_header = self.create_auth_header(server_secret=None)
         response = await fastmcp_with_secret.post(
             "/mcp",
@@ -231,7 +230,7 @@ class TestNorthTokenVerifierIntegration:
                 "params": {},
             },
         )
-        assert response.status_code == 401
+        assert response.status_code != 401
 
     @pytest.mark.asyncio
     async def test_server_secret_auth_requires_headers(
