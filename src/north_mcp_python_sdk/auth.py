@@ -231,7 +231,6 @@ class NorthAuthBackend(AuthenticationBackend):
             for header in [
                 "X-North-ID-Token",
                 "X-North-Connector-Tokens",
-                "X-North-User-Email",
             ]
         )
 

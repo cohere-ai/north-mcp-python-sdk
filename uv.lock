@@ -767,7 +767,7 @@ wheels = [
 
 [[package]]
 name = "north-mcp-python-sdk"
-version = "0.4.3"
+version = "0.4.4"
 source = { editable = "." }
 dependencies = [
     { name = "fastmcp" },
@@ -788,7 +788,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "fastmcp", specifier = ">=3.0.0,<4" },
+    { name = "fastmcp", specifier = ">=3.0.0,<3.4.3" },
     { name = "opentelemetry-api", specifier = ">=1.28.0" },
     { name = "pyjwt", extras = ["crypto"], specifier = ">=2.10.1" },
 ]

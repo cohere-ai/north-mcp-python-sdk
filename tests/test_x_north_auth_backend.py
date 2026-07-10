@@ -209,6 +209,63 @@ async def test_x_north_user_email_header_fallback():
 
 
 @pytest.mark.asyncio
+async def test_x_north_user_email_header_alone_is_not_auth_material():
+    """Test X-North-User-Email alone does not select X-North auth."""
+    backend = NorthAuthBackend()
+
+    conn = create_mock_connection(
+        {"X-North-User-Email": "context@company.com"}
+    )
+
+    auth_response = await backend.authenticate(conn)
+    if auth_response is None:
+        raise ValueError("Authentication response is None")
+    _, user = auth_response
+
+    assert isinstance(user, AuthenticatedUser)
+    assert user.access_token.token == ""
+    assert user.access_token.claims["email"] is None
+    assert user.access_token.claims["connector_access_tokens"] == {}
+
+
+@pytest.mark.asyncio
+async def test_legacy_bearer_fallback_with_user_email_context_header():
+    """Test X-North-User-Email alone does not block legacy bearer auth."""
+    from north_mcp_python_sdk.auth import AuthHeaderTokens
+
+    backend = NorthAuthBackend()
+
+    user_token = jwt.encode(
+        payload={"email": "legacy@company.com"}, key="test"
+    )
+    legacy_header = AuthHeaderTokens(
+        user_id_token=user_token,
+        connector_access_tokens={"legacy": "legacy_token"},
+    )
+    legacy_b64 = base64.b64encode(
+        json.dumps(legacy_header.model_dump()).encode()
+    ).decode()
+
+    conn = create_mock_connection(
+        {
+            "Authorization": f"Bearer {legacy_b64}",
+            "X-North-User-Email": "context@company.com",
+        }
+    )
+
+    auth_response = await backend.authenticate(conn)
+    if auth_response is None:
+        raise ValueError("Authentication response is None")
+    _, user = auth_response
+
+    assert isinstance(user, AuthenticatedUser)
+    assert user.access_token.claims["email"] == "legacy@company.com"
+    assert user.access_token.claims["connector_access_tokens"] == {
+        "legacy": "legacy_token"
+    }
+
+
+@pytest.mark.asyncio
 async def test_x_north_connector_tokens_without_id_token_open_auth():
     """Test connector tokens can provide context without an ID token in open auth mode."""
     backend = NorthAuthBackend()
