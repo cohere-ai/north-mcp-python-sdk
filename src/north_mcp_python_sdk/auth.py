@@ -391,7 +391,7 @@ class NorthAuthBackend(AuthenticationBackend):
         )
 
     async def _authenticate_legacy_bearer(
-        self, conn: HTTPConnection
+        self, conn: HTTPConnection, *, require_id_token: bool = True
     ) -> tuple[AuthCredentials, BaseUser]:
         """Authenticate using legacy Authorization Bearer header (backwards compatibility)."""
         self.logger.debug(
@@ -434,9 +434,11 @@ class NorthAuthBackend(AuthenticationBackend):
 
         if not tokens.user_id_token:
             self.logger.debug("No user ID token present in bearer token")
-            raise AuthenticationError("no authentication headers present")
-
-        email = self._process_user_id_token(tokens.user_id_token)
+            if require_id_token:
+                raise AuthenticationError("no authentication headers present")
+            email = None
+        else:
+            email = self._process_user_id_token(tokens.user_id_token)
 
         self.logger.debug("Legacy authentication successful")
         return self._create_authenticated_user(
@@ -465,7 +467,9 @@ class NorthAuthBackend(AuthenticationBackend):
                 self.logger.debug(
                     "No auth configured, but Authorization header is present; parsing legacy request context without enforcing authentication"
                 )
-                return await self._authenticate_legacy_bearer(conn)
+                return await self._authenticate_legacy_bearer(
+                    conn, require_id_token=False
+                )
 
             self.logger.debug(
                 "No trusted issuer configuration present and no auth headers provided; skipping authentication"

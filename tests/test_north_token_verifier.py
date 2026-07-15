@@ -186,6 +186,31 @@ class TestNorthTokenVerifierIntegration:
         )
         assert response.status_code != 401
 
+    @pytest.mark.asyncio
+    async def test_mcp_route_allows_empty_legacy_context_in_open_auth(
+        self, fastmcp_with_north_auth
+    ):
+        """Legacy clients may send an auth bundle without an ID token."""
+        auth_data = {
+            "user_id_token": None,
+            "connector_access_tokens": {},
+            "server_secret": None,
+        }
+        auth_header = base64.b64encode(json.dumps(auth_data).encode()).decode()
+
+        response = await fastmcp_with_north_auth.post(
+            "/mcp",
+            headers={"Authorization": auth_header},
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {},
+            },
+        )
+
+        assert response.status_code != 401
+
 
 class TestOnAuthError:
     """Test the on_auth_error helper function."""
