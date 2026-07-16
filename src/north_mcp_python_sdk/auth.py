@@ -39,6 +39,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 class AuthHeaderTokens(BaseModel):
     user_id_token: str | None
+    user_email: str | None = None
     connector_access_tokens: dict[str, str] = Field(default_factory=dict)
 
 
@@ -436,9 +437,11 @@ class NorthAuthBackend(AuthenticationBackend):
             self.logger.debug("No user ID token present in bearer token")
             if require_id_token:
                 raise AuthenticationError("no authentication headers present")
-            email = None
+            token_email = None
         else:
-            email = self._process_user_id_token(tokens.user_id_token)
+            token_email = self._process_user_id_token(tokens.user_id_token)
+
+        email = token_email if token_email is not None else tokens.user_email
 
         self.logger.debug("Legacy authentication successful")
         return self._create_authenticated_user(
