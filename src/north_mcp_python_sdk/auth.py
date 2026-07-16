@@ -39,6 +39,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 class AuthHeaderTokens(BaseModel):
     user_id_token: str | None
+    user_email: str | None = None
     connector_access_tokens: dict[str, str] = Field(default_factory=dict)
 
 
@@ -391,7 +392,7 @@ class NorthAuthBackend(AuthenticationBackend):
         )
 
     async def _authenticate_legacy_bearer(
-        self, conn: HTTPConnection
+        self, conn: HTTPConnection, *, require_id_token: bool = True
     ) -> tuple[AuthCredentials, BaseUser]:
         """Authenticate using legacy Authorization Bearer header (backwards compatibility)."""
         self.logger.debug(
@@ -434,9 +435,13 @@ class NorthAuthBackend(AuthenticationBackend):
 
         if not tokens.user_id_token:
             self.logger.debug("No user ID token present in bearer token")
-            raise AuthenticationError("no authentication headers present")
+            if require_id_token:
+                raise AuthenticationError("no authentication headers present")
+            token_email = None
+        else:
+            token_email = self._process_user_id_token(tokens.user_id_token)
 
-        email = self._process_user_id_token(tokens.user_id_token)
+        email = token_email if token_email is not None else tokens.user_email
 
         self.logger.debug("Legacy authentication successful")
         return self._create_authenticated_user(
@@ -465,7 +470,9 @@ class NorthAuthBackend(AuthenticationBackend):
                 self.logger.debug(
                     "No auth configured, but Authorization header is present; parsing legacy request context without enforcing authentication"
                 )
-                return await self._authenticate_legacy_bearer(conn)
+                return await self._authenticate_legacy_bearer(
+                    conn, require_id_token=False
+                )
 
             self.logger.debug(
                 "No trusted issuer configuration present and no auth headers provided; skipping authentication"

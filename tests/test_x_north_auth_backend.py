@@ -165,6 +165,56 @@ async def test_legacy_bearer_fallback():
 
 
 @pytest.mark.asyncio
+async def test_legacy_bearer_without_id_token_open_auth():
+    """Test legacy context without an ID token is accepted in open auth mode."""
+    backend = NorthAuthBackend()
+    legacy_header = {
+        "user_id_token": None,
+        "connector_access_tokens": {"github": "token123"},
+        "server_secret": None,
+    }
+    legacy_b64 = base64.b64encode(json.dumps(legacy_header).encode()).decode()
+    conn = create_mock_connection({"Authorization": legacy_b64})
+
+    auth_response = await backend.authenticate(conn)
+    if auth_response is None:
+        raise ValueError("Authentication response is None")
+    _, user = auth_response
+
+    assert isinstance(user, AuthenticatedUser)
+    assert user.access_token.token == ""
+    assert user.access_token.claims["email"] is None
+    assert user.access_token.claims["connector_access_tokens"] == {
+        "github": "token123"
+    }
+
+
+@pytest.mark.asyncio
+async def test_current_legacy_bundle_uses_user_email_without_id_token():
+    """Test the current North legacy bundle preserves user email context."""
+    backend = NorthAuthBackend()
+    legacy_header = {
+        "user_id_token": None,
+        "user_email": "legacy@company.com",
+        "connector_access_tokens": {"github": "token123"},
+    }
+    legacy_b64 = base64.b64encode(json.dumps(legacy_header).encode()).decode()
+    conn = create_mock_connection({"Authorization": legacy_b64})
+
+    auth_response = await backend.authenticate(conn)
+    if auth_response is None:
+        raise ValueError("Authentication response is None")
+    _, user = auth_response
+
+    assert isinstance(user, AuthenticatedUser)
+    assert user.access_token.token == ""
+    assert user.access_token.claims["email"] == "legacy@company.com"
+    assert user.access_token.claims["connector_access_tokens"] == {
+        "github": "token123"
+    }
+
+
+@pytest.mark.asyncio
 async def test_minimal_x_north_headers():
     """Test X-North with minimal supported headers."""
     backend = NorthAuthBackend()

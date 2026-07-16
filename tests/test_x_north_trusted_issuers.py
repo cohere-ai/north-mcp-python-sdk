@@ -116,6 +116,25 @@ async def test_trusted_issuers_require_auth_headers():
 
 
 @pytest.mark.asyncio
+async def test_trusted_issuers_reject_legacy_bearer_without_id_token():
+    backend = NorthAuthBackend(
+        trusted_issuers=["https://example.okta.com"],
+    )
+    legacy_header = {
+        "user_id_token": None,
+        "connector_access_tokens": {},
+        "server_secret": None,
+    }
+    legacy_b64 = base64.b64encode(json.dumps(legacy_header).encode()).decode()
+    conn = create_mock_connection({"Authorization": legacy_b64})
+
+    with pytest.raises(
+        AuthenticationError, match="no authentication headers present"
+    ):
+        await backend.authenticate(conn)
+
+
+@pytest.mark.asyncio
 async def test_trusted_issuers_reject_email_header_without_id_token():
     backend = NorthAuthBackend(
         trusted_issuers=["https://example.okta.com"],
