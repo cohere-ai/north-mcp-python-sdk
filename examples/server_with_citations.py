@@ -15,7 +15,7 @@ Keep `title` and `url` at the top level too. North uses those fields when
 labelling the tool result in the thinking UI.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from north_mcp_python_sdk import NorthMCPServer
@@ -55,7 +55,7 @@ def search_knowledge_base(query: str) -> list[dict[str, Any]]:
                 "meta": {
                     "author_name": "Wikipedia Contributors",
                     "last_updated": str(
-                        int(datetime(2024, 1, 15).timestamp())
+                        int(datetime(2024, 1, 15, tzinfo=UTC).timestamp())
                     ),
                 },
             },
@@ -72,7 +72,7 @@ def search_knowledge_base(query: str) -> list[dict[str, Any]]:
                 "meta": {
                     "author_name": "Tim Peters",
                     "last_updated": str(
-                        int(datetime(2004, 8, 23).timestamp())
+                        int(datetime(2004, 8, 23, tzinfo=UTC).timestamp())
                     ),
                 },
             },
